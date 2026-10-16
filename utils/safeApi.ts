@@ -536,9 +536,10 @@ export function extractContent(data: any): string {
 
     let text = contentToText(msg?.content);
     if (!text.trim()) text = contentToText(msg?.reasoning_content);
-    // Strip hidden chain-of-thought blocks: <think> / <thinking> / <thought>
-    text = text.replace(/<(think|thinking|thought)>[\s\S]*?<\/\1>/gi, '');
-    text = text.replace(/<(?:think|thinking|thought)>[\s\S]*$/gi, '');
+    // Strip hidden chain-of-thought blocks: <think> / <thinking> / <thought> / <draft> / <!-- charThink/plotThink -->
+    text = text.replace(/<(think|thinking|thought|draft)>[\s\S]*?<\/\1>/gi, '');
+    text = text.replace(/<(?:think|thinking|thought|draft)>[\s\S]*$/gi, '');
+    text = text.replace(/<!--\s*(?:charThink|plotThink)[\s\S]*?-->/gi, '');
     return text.trim();
 }
 

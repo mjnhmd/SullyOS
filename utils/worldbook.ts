@@ -1,4 +1,4 @@
-import type {
+import {
     MountedWorldbook,
     Worldbook,
     WorldbookDepthRole,
@@ -31,19 +31,19 @@ export interface WorldbookSystemSections {
 }
 
 export const WORLDBOOK_POSITION_LABELS: Record<WorldbookPosition, string> = {
-    0: '角色设定前',
-    1: '角色设定后',
-    2: '作者注释顶部',
-    3: '作者注释底部',
+    0: '角色定义之前',
+    1: '角色定义之后',
+    2: '作者注释之前',
+    3: '作者注释之后',
     4: '聊天记录指定深度',
-    5: '示例消息前',
-    6: '示例消息后',
+    5: '示例消息之前',
+    6: '示例消息之后',
 };
 
 export const WORLDBOOK_POSITION_DESCRIPTIONS: Record<WorldbookPosition, string> = {
-    0: '适合放全局规则、基础背景；会出现在角色身份与性格设定之前。',
-    1: '适合一般世界观、人物与地点设定；这是旧版世界书一直使用的默认位置。',
-    2: '适合放写作方向、语气或节奏要求；位于作者注释内容顶部。',
+    0: '适合最高优先级的世界底层规则，放在角色设定前面。',
+    1: '默认位置；紧跟在角色人设和基础世界观后面。',
+    2: '适合场景风格、叙事基调，放在后置注释内容顶部。',
     3: '适合放作者注释后的补充与强调；比顶部内容更靠后。',
     4: '适合临时状态、近期事件或强提醒；按深度和角色插入聊天记录。',
     5: '适合放阅读示例对话前需要先知道的说明。',
@@ -62,15 +62,16 @@ const clamp = (value: unknown, min: number, max: number, fallback: number): numb
 };
 
 const asStringArray = (value: unknown): string[] => {
-    if (!Array.isArray(value)) return [];
-    return value.map(item => String(item).trim()).filter(Boolean);
+    if (Array.isArray(value)) return value.map(item => String(item).trim()).filter(Boolean);
+    if (typeof value === 'string') return splitWorldbookKeywords(value);
+    return [];
 };
 
 export const splitWorldbookKeywords = (value: string): string[] => (
     value.split(/[,，\n]/).map(item => item.trim()).filter(Boolean)
 );
 
-export const toMountedWorldbook = (book: Worldbook): MountedWorldbook => ({
+export const toMountedWorldbook = (book: WorldbookLike): MountedWorldbook => ({
     id: book.id,
     title: book.title,
     content: book.content,
@@ -90,6 +91,15 @@ export const toMountedWorldbook = (book: Worldbook): MountedWorldbook => ({
     scanDepth: book.scanDepth,
     caseSensitive: book.caseSensitive,
     matchWholeWords: book.matchWholeWords,
+    excludeRecursion: book.excludeRecursion,
+    preventRecursion: book.preventRecursion,
+    delayUntilRecursion: book.delayUntilRecursion,
+    sticky: book.sticky,
+    cooldown: book.cooldown,
+    delay: book.delay,
+    group: book.group,
+    groupWeight: book.groupWeight,
+    groupOverride: book.groupOverride,
     sourceUid: book.sourceUid,
 });
 
@@ -161,20 +171,34 @@ const secondaryConditionPasses = (
     return matches.some(Boolean);
 };
 
+export interface WorldbookActivationOptions {
+    isRecursion?: boolean;
+    recursionText?: string;
+}
+
 export const isWorldbookEntryActive = (
     book: WorldbookLike,
     messages: WorldbookScanMessage[] = [],
+    options?: WorldbookActivationOptions,
 ): boolean => {
     if (book.disable) return false;
 
+    const isRecursion = options?.isRecursion === true;
+    if (isRecursion && book.excludeRecursion) return false;
+    if (!isRecursion && book.delayUntilRecursion) return false;
+
+    const delay = Math.max(0, Math.floor(Number(book.delay) || 0));
+    if (delay > 0 && messages.length < delay) return false;
+
     const primary = book.key || [];
     const isConstant = book.constant ?? primary.length === 0;
-    const text = scanTextForBook(book, messages);
-    const caseSensitive = book.caseSensitive === true;
-    const wholeWords = book.matchWholeWords === true;
-
-    if (!isConstant) {
+    if (isConstant) {
+        if (isRecursion) return false;
+    } else {
         if (primary.length === 0) return false;
+        const caseSensitive = book.caseSensitive === true;
+        const wholeWords = book.matchWholeWords === true;
+        const text = isRecursion ? String(options?.recursionText || '') : scanTextForBook(book, messages);
         if (!primary.some(key => keywordMatches(text, key, caseSensitive, wholeWords))) return false;
         if (!secondaryConditionPasses(book, text, caseSensitive, wholeWords)) return false;
     }
@@ -192,7 +216,75 @@ export const expandWorldbookMacros = (content: string, charName: string, userNam
     let expanded = content;
     if (charName) expanded = expanded.replace(/{{\s*char\s*}}/gi, charName);
     if (userName) expanded = expanded.replace(/{{\s*user\s*}}/gi, userName);
+    // Support {{random::a::b}} and {{random:a,b}}
+    expanded = expanded.replace(/\{\{random::([^{}]+)\}\}/gi, (_m, inner: string) => {
+        const items = inner.split('::').map(s => s.trim()).filter(Boolean);
+        return items.length ? items[Math.floor(Math.random() * items.length)] : '';
+    });
+    expanded = expanded.replace(/\{\{random:([^{}]+)\}\}/gi, (_m, inner: string) => {
+        const items = inner.split(',').map(s => s.trim()).filter(Boolean);
+        return items.length ? items[Math.floor(Math.random() * items.length)] : '';
+    });
     return expanded;
+};
+
+/**
+ * Filter candidate entries by SillyTavern Inclusion Group rules:
+ * - If a group has already been activated in an earlier pass, drop candidates in that group.
+ * - Within the same group in the current pass:
+ *   - If any entry has `groupOverride: true`, only `groupOverride` entries compete (highest `order` wins; ties broken by weight).
+ *   - Otherwise, weighted random selection using `groupWeight` (default 100).
+ */
+const filterByInclusionGroups = (
+    candidates: WorldbookLike[],
+    activatedGroups: Set<string>,
+): WorldbookLike[] => {
+    const filtered = candidates.filter(book => {
+        const g = (book.group || '').trim();
+        return !g || !activatedGroups.has(g);
+    });
+    const byGroup = new Map<string, WorldbookLike[]>();
+    for (const book of filtered) {
+        const g = (book.group || '').trim();
+        if (!g) continue;
+        const list = byGroup.get(g) || [];
+        list.push(book);
+        byGroup.set(g, list);
+    }
+    if (byGroup.size === 0) return filtered;
+
+    const winners = new Set<WorldbookLike>();
+    for (const [g, list] of byGroup.entries()) {
+        if (list.length === 1) {
+            winners.add(list[0]);
+            activatedGroups.add(g);
+            continue;
+        }
+        const overrides = list.filter(b => b.groupOverride === true);
+        const pool = overrides.length > 0 ? overrides : list;
+        if (pool.length === 1) {
+            winners.add(pool[0]);
+            activatedGroups.add(g);
+            continue;
+        }
+        const totalWeight = pool.reduce((sum, b) => sum + Math.max(1, Number(b.groupWeight) || 100), 0);
+        let roll = Math.random() * totalWeight;
+        let chosen = pool[pool.length - 1];
+        for (const item of pool) {
+            roll -= Math.max(1, Number(item.groupWeight) || 100);
+            if (roll <= 0) {
+                chosen = item;
+                break;
+            }
+        }
+        winners.add(chosen);
+        activatedGroups.add(g);
+    }
+
+    return filtered.filter(book => {
+        const g = (book.group || '').trim();
+        return !g || winners.has(book);
+    });
 };
 
 export const resolveWorldbookEntries = (
@@ -200,16 +292,56 @@ export const resolveWorldbookEntries = (
     messages: WorldbookScanMessage[] = [],
     charName = '',
     userName = '',
-): ResolvedWorldbookEntry[] => books
-    .filter(book => isWorldbookEntryActive(book, messages))
-    .map(book => ({
-        book,
-        content: expandWorldbookMacros(book.content || '', charName, userName),
-        position: book.position ?? 1,
-        order: Number.isFinite(book.order) ? Number(book.order) : 100,
-    }))
-    .filter(entry => entry.content.trim())
-    .sort((a, b) => a.order - b.order);
+): ResolvedWorldbookEntry[] => {
+    const activatedIds = new Set<string>();
+    const activatedGroups = new Set<string>();
+    const activatedBooks: WorldbookLike[] = [];
+
+    // Pass 0: initial scan (constants + primary/secondary keywords on messages)
+    const initialCandidates = books.filter(book => {
+        if (!book || activatedIds.has(book.id)) return false;
+        return isWorldbookEntryActive(book, messages, { isRecursion: false });
+    });
+    let currentWave = filterByInclusionGroups(initialCandidates, activatedGroups);
+    for (const book of currentWave) {
+        activatedIds.add(book.id);
+        activatedBooks.push(book);
+    }
+
+    // Recursion passes (up to 3 steps) for entries triggered by other entries' content
+    const maxRecursionSteps = 3;
+    for (let step = 0; step < maxRecursionSteps && currentWave.length > 0; step += 1) {
+        const recursionBuffer = currentWave
+            .filter(book => !book.preventRecursion)
+            .map(book => expandWorldbookMacros(book.content || '', charName, userName))
+            .join('\n');
+        if (!recursionBuffer.trim()) break;
+
+        const nextCandidates = books.filter(book => {
+            if (!book || activatedIds.has(book.id)) return false;
+            return isWorldbookEntryActive(book, messages, {
+                isRecursion: true,
+                recursionText: recursionBuffer,
+            });
+        });
+        if (nextCandidates.length === 0) break;
+        currentWave = filterByInclusionGroups(nextCandidates, activatedGroups);
+        for (const book of currentWave) {
+            activatedIds.add(book.id);
+            activatedBooks.push(book);
+        }
+    }
+
+    return activatedBooks
+        .map(book => ({
+            book,
+            content: expandWorldbookMacros(book.content || '', charName, userName),
+            position: book.position ?? 1,
+            order: Number.isFinite(book.order) ? Number(book.order) : 100,
+        }))
+        .filter(entry => entry.content.trim())
+        .sort((a, b) => a.order - b.order);
+};
 
 /**
  * 只取「聊天记录指定深度」的条目，交给 injectWorldbookDepthEntries 插进对话。
@@ -313,6 +445,15 @@ export const serializeStandardWorldbook = (books: WorldbookLike[]): string => {
             scanDepth: book.scanDepth ?? null,
             caseSensitive: book.caseSensitive ?? null,
             matchWholeWords: book.matchWholeWords ?? null,
+            excludeRecursion: book.excludeRecursion === true,
+            preventRecursion: book.preventRecursion === true,
+            delayUntilRecursion: book.delayUntilRecursion === true,
+            sticky: book.sticky ?? 0,
+            cooldown: book.cooldown ?? 0,
+            delay: book.delay ?? 0,
+            group: book.group ?? '',
+            groupWeight: book.groupWeight ?? 100,
+            groupOverride: book.groupOverride === true,
             displayIndex: index,
         };
     });
@@ -326,40 +467,71 @@ export const parseStandardWorldbook = (
     now = Date.now(),
 ): Worldbook[] => {
     const parsed = JSON.parse(rawText);
-    if (!parsed || typeof parsed !== 'object' || !parsed.entries || typeof parsed.entries !== 'object') {
+    // Support top-level { entries: ... }, Character Card V2/V3 { data: { character_book: { entries: ... } } }, or { character_book: { entries: ... } }
+    const container = parsed?.entries
+        ? parsed
+        : parsed?.data?.character_book?.entries
+            ? parsed.data.character_book
+            : parsed?.character_book?.entries
+                ? parsed.character_book
+                : null;
+    if (!container || typeof container !== 'object' || !container.entries || typeof container.entries !== 'object') {
         throw new Error('不是受支持的标准世界书文件：缺少 entries');
     }
-    const rawEntries = Array.isArray(parsed.entries)
-        ? parsed.entries
-        : Object.values(parsed.entries);
+    const rawEntries = Array.isArray(container.entries)
+        ? container.entries
+        : Object.values(container.entries);
+
+    const resolvedCategory = (container.name && String(container.name).trim()) || category;
 
     const books = rawEntries.flatMap((value: any, index: number): Worldbook[] => {
         if (!value || typeof value !== 'object' || typeof value.content !== 'string') return [];
-        const uid = Number.isFinite(Number(value.uid)) ? Number(value.uid) : index;
-        const position = clamp(value.position, 0, 6, 1) as WorldbookPosition;
-        const rawRole = value.role == null ? null : clamp(value.role, 0, 2, 0) as WorldbookDepthRole;
+        const uid = Number.isFinite(Number(value.uid ?? value.id)) ? Number(value.uid ?? value.id) : index;
+        // Support SillyTavern character_book position strings ('before_char' | 'after_char') as well as numeric 0..6
+        const rawPos = value.position === 'before_char'
+            ? 0
+            : value.position === 'after_char'
+                ? 1
+                : value.extensions?.position ?? value.position;
+        const position = clamp(rawPos, 0, 6, 1) as WorldbookPosition;
+        const rawRoleVal = value.role ?? value.extensions?.role;
+        const rawRole = rawRoleVal == null ? null : clamp(rawRoleVal, 0, 2, 0) as WorldbookDepthRole;
+        const primaryKeys = asStringArray(value.key ?? value.keys);
+        const secondaryKeys = asStringArray(value.keysecondary ?? value.secondary_keys);
+        const isDisabled = value.disable === true || value.enabled === false;
+        const ext = value.extensions && typeof value.extensions === 'object' ? value.extensions : {};
+
         return [{
             id: `wb-${now}-${index}-${Math.random().toString(36).slice(2, 8)}`,
             title: String(value.comment || value.name || `条目 ${uid + 1}`),
             content: value.content,
-            category,
+            category: resolvedCategory,
             createdAt: now,
             updatedAt: now,
-            key: asStringArray(value.key),
-            keysecondary: asStringArray(value.keysecondary),
+            key: primaryKeys,
+            keysecondary: secondaryKeys,
             constant: value.constant === true,
-            selective: value.selective === true,
-            selectiveLogic: clamp(value.selectiveLogic, 0, 3, 0) as WorldbookSelectiveLogic,
-            order: Number.isFinite(Number(value.order)) ? Number(value.order) : 100,
+            selective: value.selective !== undefined ? value.selective === true : secondaryKeys.length > 0,
+            selectiveLogic: clamp(value.selectiveLogic ?? ext.selectiveLogic, 0, 3, 0) as WorldbookSelectiveLogic,
+            order: Number.isFinite(Number(value.order ?? value.insertion_order)) ? Number(value.order ?? value.insertion_order) : 100,
             position,
-            disable: value.disable === true,
-            probability: clamp(value.probability, 0, 100, 100),
-            useProbability: value.useProbability === true,
-            depth: Math.max(0, Math.floor(clamp(value.depth, 0, 999, 4))),
+            disable: isDisabled,
+            probability: clamp(value.probability ?? ext.probability, 0, 100, 100),
+            useProbability: value.useProbability !== undefined ? value.useProbability === true : (ext.useProbability === true || value.probability !== undefined),
+            depth: Math.max(0, Math.floor(clamp(value.depth ?? ext.depth, 0, 999, 4))),
             role: rawRole,
-            scanDepth: value.scanDepth == null ? null : Math.max(0, Math.floor(clamp(value.scanDepth, 0, 999, 4))),
-            caseSensitive: value.caseSensitive == null ? null : value.caseSensitive === true,
-            matchWholeWords: value.matchWholeWords == null ? null : value.matchWholeWords === true,
+            scanDepth: (value.scanDepth ?? ext.scan_depth) == null ? null : Math.max(0, Math.floor(clamp(value.scanDepth ?? ext.scan_depth, 0, 999, 4))),
+            caseSensitive: (value.caseSensitive ?? value.case_sensitive ?? ext.case_sensitive) == null ? null : Boolean(value.caseSensitive ?? value.case_sensitive ?? ext.case_sensitive),
+            matchWholeWords: (value.matchWholeWords ?? ext.match_whole_words) == null ? null : Boolean(value.matchWholeWords ?? ext.match_whole_words),
+            excludeRecursion: Boolean(value.excludeRecursion ?? ext.exclude_recursion),
+            preventRecursion: Boolean(value.preventRecursion ?? ext.prevent_recursion),
+            delayUntilRecursion: Boolean(value.delayUntilRecursion ?? ext.delay_until_recursion),
+            sticky: Math.max(0, Math.floor(Number(value.sticky ?? ext.sticky) || 0)),
+            cooldown: Math.max(0, Math.floor(Number(value.cooldown ?? ext.cooldown) || 0)),
+            delay: Math.max(0, Math.floor(Number(value.delay ?? ext.delay) || 0)),
+            group: typeof (value.group ?? ext.group) === 'string' ? String(value.group ?? ext.group).trim() : '',
+            groupWeight: Math.max(1, Math.floor(clamp(value.groupWeight ?? ext.group_weight, 1, 10000, 100))),
+            groupOverride: Boolean(value.groupOverride ?? ext.group_override),
             sourceUid: uid,
         }];
     });

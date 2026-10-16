@@ -437,22 +437,54 @@ const uploadOneAsset = async (
     const url = `${UPLOAD_HOST}/repos/${owner}/${repo}/releases/${releaseId}/assets?name=${encodeURIComponent(assetName)}`;
 
     if (isNative()) {
-        // CapacitorHttp 在原生这边不能正确转发二进制 body — 把 Blob/ArrayBuffer
-        // 通过 JS↔native 桥传过去，桥会尝试 JSON 化导致 upstream 收到 0 字节体，
-        // GitHub 还是 201 创建了 asset，但 size = 0（用户看到的就是 0.0 MB）。
-        // WebView 自带的 fetch() 可以直接处理 Blob body；是否真的能触达
-        // uploads.github.com 仍取决于设备网络、VPN/PWA 接管和服务端跨域行为。
-        // useProxy 决定走应用内 Worker 还是直连。
+        // 当未开启 Cloudflare Worker 中转时，uploads.github.com 对 WebView (https://localhost)
+        // 的 OPTIONS 预检返回 400 Bad Content-Length 且无 CORS 头，WebView fetch() 必然报 Failed to fetch。
+        // 因此原生直连统一走 ghRequest (CapacitorHttp + base64 + dataType:'file')，由 Android 原生
+        // HttpURLConnection 发送原始二进制字节，彻底绕过 WebView CORS 拦截！
+        if (!shouldUseGithubProxy(config)) {
+            try {
+                const res = await ghRequest(config, url, 'POST', {
+                    headers: authHeaders(token, { 'Content-Type': contentType }),
+                    body: blob,
+                });
+                onFraction?.(1);
+                if (res.status === 201) {
+                    let asset: GithubAsset | undefined;
+                    try { asset = await res.json(); } catch { /* reconciled by caller */ }
+                    if (isUsableAsset(asset, blob.size)) {
+                        return { ok: true, message: '上传成功', status: res.status, headers: res.headers, asset };
+                    }
+                    return {
+                        ok: false,
+                        status: res.status,
+                        headers: res.headers,
+                        message: 'GitHub 已创建附件，但附件状态或大小不正确',
+                    };
+                }
+                const text = await res.text();
+                return {
+                    ok: false,
+                    status: res.status,
+                    headers: res.headers,
+                    message: `上传失败 (${res.status}): ${text.slice(0, 120)}`,
+                };
+            } catch (e: any) {
+                const kind = e?.name === 'AbortError' || /timeout|超时/i.test(String(e?.message || '')) ? 'timeout' : 'network';
+                return { ok: false, message: describeGithubUploadTransportFailure(config, kind) };
+            }
+        }
+
+        // 开启了 Cloudflare Worker 中转时，Worker 已处理好 CORS，使用 WebView fetch 流式发送 Blob
         const abortController = new AbortController();
         const timeoutId = setTimeout(() => abortController.abort(), UPLOAD_TIMEOUT_MS);
         try {
-            const targetUrl = shouldUseGithubProxy(config) ? proxify(url) : url;
+            const targetUrl = proxify(url);
             const headers: Record<string, string> = {
                 Authorization: `Bearer ${token}`,
                 Accept: 'application/vnd.github+json',
                 'Content-Type': contentType,
+                'X-GitHub-Method': 'POST',
             };
-            if (shouldUseGithubProxy(config)) headers['X-GitHub-Method'] = 'POST';
             const res = await fetch(targetUrl, {
                 method: 'POST',
                 headers,

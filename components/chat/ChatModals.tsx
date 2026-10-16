@@ -14,6 +14,13 @@ import type { ContextRangeMode, ContextRangeSnapshot } from '../../utils/chatCon
 import { trackEvent } from '../../utils/analytics';
 import { CANTONESE_VOICE_SUPPORT_NOTE, VOICE_LANGUAGE_OPTIONS } from '../../utils/voiceLanguage';
 import { chatMessageFuzzyMatchesKeyword } from '../../utils/chatMessageSearch';
+import { useOS } from '../../context/OSContext';
+import { DB } from '../../utils/db';
+import { readShareFile } from '../../utils/pngShare';
+import { parseStoryTheaterPreset, withBuiltInStoryPresets } from '../../utils/storyTheater';
+import { getGlobalActivePresetId, setGlobalActivePresetId } from '../../utils/tavernPreset';
+import { AppID } from '../../types';
+import type { StoryTheaterPreset } from '../../types';
 
 interface ChatModalsProps {
     compactHome?: boolean;
@@ -276,6 +283,32 @@ const ChatModals: React.FC<ChatModalsProps> = ({
     retainRecentForVectorize, setRetainRecentForVectorize, vectorizeResult, onForceVectorize,
     apiPresets, onAddApiPreset, onSaveEmotion, onClearBuffs,
 }) => {
+    const { updateCharacter, addToast, openApp } = useOS();
+    const [chatPresets, setChatPresets] = useState<StoryTheaterPreset[]>([]);
+    const chatPresetInputRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        if (modalType === 'chat-settings') {
+            DB.getStoryTheaterPresets()
+                .then(stored => setChatPresets(withBuiltInStoryPresets(stored.filter(p => !p.builtIn))))
+                .catch(() => setChatPresets(withBuiltInStoryPresets([])));
+        }
+    }, [modalType]);
+    const handleImportChatPreset = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (e.target) e.target.value = '';
+        if (!file || !activeCharacter) return;
+        try {
+            const source = await readShareFile(file, 'story');
+            const imported = parseStoryTheaterPreset(await source.text(), source.name);
+            await DB.saveStoryTheaterPreset(imported);
+            setGlobalActivePresetId(imported.id);
+            setChatPresets(prev => [imported, ...prev.filter(item => item.id !== imported.id)]);
+            updateCharacter(activeCharacter.id, { boundChatPresetId: undefined });
+            addToast(`已导入并全局启用「${imported.name}」（聊天与见面同步生效）`, 'success');
+        } catch (err: any) {
+            addToast(err?.message || '预设导入失败', 'error');
+        }
+    };
     const [visibilitySelection, setVisibilitySelection] = useState<Set<string>>(new Set());
     const [historyPage, setHistoryPage] = useState(0);
     const [historySearch, setHistorySearch] = useState('');
@@ -684,6 +717,76 @@ const ChatModals: React.FC<ChatModalsProps> = ({
                                         className="w-full h-28 bg-slate-50 rounded-2xl p-3 text-[12px] resize-none border border-slate-200 focus:outline-none focus:border-fuchsia-300"
                                     />
                                     <p className="text-[10px] text-slate-400 mt-1">留空则只使用内置提示词。</p>
+                                </div>
+                            )}
+                        </div>
+                    </ChatSettingsSection>
+                    <ChatSettingsSection title="酒馆 / 提示词预设" summary="直接导入酒馆预设并在正常聊天生效">
+                        <div className="space-y-3 pt-1">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 mb-1.5 block">当前聊天绑定预设</label>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={activeCharacter?.boundChatPresetId || ''}
+                                        onChange={e => {
+                                            if (!activeCharacter) return;
+                                            updateCharacter(activeCharacter.id, { boundChatPresetId: e.target.value || undefined });
+                                        }}
+                                        className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-700 outline-none"
+                                    >
+                                        <option value="">
+                                            跟随全局预设（{chatPresets.find(p => p.id === getGlobalActivePresetId())?.name || '当前未启用'}）
+                                        </option>
+                                        <option value="__none__">仅本角色关闭预设</option>
+                                        {chatPresets.map(preset => (
+                                            <option key={preset.id} value={preset.id}>单独绑定：{preset.name}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => chatPresetInputRef.current?.click()}
+                                        className="shrink-0 rounded-xl bg-indigo-500 px-3 py-2.5 text-xs font-bold text-white active:scale-95 transition-transform"
+                                    >
+                                        导入酒馆预设
+                                    </button>
+                                    <input
+                                        ref={chatPresetInputRef}
+                                        type="file"
+                                        accept=".json,.png,application/json,image/png"
+                                        className="hidden"
+                                        onChange={handleImportChatPreset}
+                                    />
+                                </div>
+                                <div className="mt-2 flex items-center justify-between gap-2">
+                                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                                        在桌面「预设」App 导入一次，正常聊天与见面（陪伴/剧场）自动全局同步生效。
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setModalType('none');
+                                            openApp(AppID.Presets);
+                                        }}
+                                        className="shrink-0 text-[11px] font-bold text-indigo-600 underline"
+                                    >
+                                        打开预设 App ›
+                                    </button>
+                                </div>
+                            </div>
+                            {activeCharacter?.boundChatPresetId && (
+                                <div className="pt-2 border-t border-slate-100">
+                                    <div
+                                        className="flex justify-between items-center cursor-pointer"
+                                        onClick={() => updateCharacter(activeCharacter.id, { chatPresetAllowFormatOverride: !activeCharacter.chatPresetAllowFormatOverride })}
+                                    >
+                                        <label className="text-xs font-bold text-slate-500 pointer-events-none">保留预设长文格式指令</label>
+                                        <div className={`w-10 h-6 rounded-full p-1 transition-colors flex items-center ${activeCharacter.chatPresetAllowFormatOverride ? 'bg-indigo-500' : 'bg-slate-200'}`}>
+                                            <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${activeCharacter.chatPresetAllowFormatOverride ? 'translate-x-4' : ''}`} />
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+                                        默认关闭（推荐）：自动剥离预设中强制输出小说标签（如 &lt;now_plot&gt;）的指令，在享受预设破甲、人称、文风与行为树的同时保持微信短气泡体验。
+                                    </p>
                                 </div>
                             )}
                         </div>

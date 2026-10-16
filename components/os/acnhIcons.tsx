@@ -125,6 +125,7 @@ const ACNH_ICON_MAP: Partial<Record<AppID, React.ReactNode>> = {
   [AppID.Novel]: draw([21, 24, 79, 77], bookGlyph),
   [AppID.Study]: draw([21, 24, 79, 77], bookGlyph),
   [AppID.Worldbook]: draw([21, 24, 79, 77], bookGlyph),
+  [AppID.Presets]: draw([20, 28, 80, 78], slidersGlyph),
   [AppID.Guidebook]: draw([21, 24, 79, 77], bookGlyph),
   [AppID.Schedule]: draw([22, 20, 78, 80], <>
     <rect x="22" y="26" width="56" height="54" rx="8" fill={CREAM} />

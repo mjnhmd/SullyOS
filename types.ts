@@ -21,6 +21,7 @@ export enum AppID {
   FAQ = 'faq',
   Game = 'game',
   Worldbook = 'worldbook', 
+  Presets = 'presets',
   Novel = 'novel', 
   Bank = 'bank', // New App
   XhsStock = 'xhs_stock', // XHS image stock for publishing
@@ -1119,7 +1120,35 @@ export interface WorldbookEntryConfig {
     scanDepth?: number | null;
     caseSensitive?: boolean | null;
     matchWholeWords?: boolean | null;
+    /** SillyTavern recursion & timed effect controls */
+    excludeRecursion?: boolean;
+    preventRecursion?: boolean;
+    delayUntilRecursion?: boolean;
+    sticky?: number;
+    cooldown?: number;
+    delay?: number;
+    /** SillyTavern Inclusion Group controls */
+    group?: string;
+    groupWeight?: number;
+    groupOverride?: boolean;
     sourceUid?: number;
+}
+
+export interface TavernRegexRule {
+    id: string;
+    name: string;
+    pattern: string;
+    flags: string;
+    replacement: string;
+    trimStrings?: string[];
+    substituteRegex?: number;
+    minDepth?: number | null;
+    maxDepth?: number | null;
+    enabled: boolean;
+    applyOnPrompt: boolean;
+    applyOnDisplay: boolean;
+    role: 'user' | 'ai' | 'both';
+    order: number;
 }
 
 export interface MountedWorldbook extends WorldbookEntryConfig {
@@ -2299,6 +2328,8 @@ export interface StoryTheaterPresetDocument {
     };
     prompts: StoryTheaterPresetPrompt[];
     assistantPrefill?: string;
+    /** 随酒馆/糯叽机预设导入的正则规则（Prompt 清洗与 Display 渲染） */
+    regexRules?: TavernRegexRule[];
 }
 
 /** 糯米机专属剧情预设。导入器只接受 sullyos.story-preset，不兼容其它应用格式。 */
@@ -2897,6 +2928,14 @@ export interface CharacterProfile {
   writerPersonaGeneratedAt?: number;
 
   mountedWorldbooks?: MountedWorldbook[];
+  /** 从酒馆角色卡导入的多开场白（first_mes + alternate_greetings） */
+  tavernGreetings?: string[];
+  /** 从酒馆角色卡导入的专属正则脚本（extensions.regex_scripts） */
+  tavernRegexRules?: TavernRegexRule[];
+  /** 正常聊天（ChatApp）绑定的预设 ID（复用剧场/酒馆预设库） */
+  boundChatPresetId?: string;
+  /** 正常聊天启用预设时是否保留预设的后置格式指令（默认 false = 只用人设/文风/破甲/COT，保持微信一行一泡格式） */
+  chatPresetAllowFormatOverride?: boolean;
 
   /** 角色对用户的私密印象；其中的性格、MBTI 和喜好属于用户，不是角色本人。 */
   impression?: UserImpression;

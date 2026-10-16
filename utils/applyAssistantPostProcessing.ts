@@ -81,9 +81,10 @@ export function buildReplySnapshotContent(msg: { type?: string; content: string 
 /** 第一遍粗洗 — 剥 <think> / 时间戳 / 历史里漏出的 [聊天]/[通话]/[约会] / 表情包反向 tag */
 const normalizeAiContent = (raw: string): string => {
     let cleaned = normalizeAssistantActionFormatting(raw || '');
-    // Strip hidden chain-of-thought blocks: <think> / <thinking> / <thought>
-    cleaned = cleaned.replace(/<(think|thinking|thought)>[\s\S]*?<\/\1>/gi, '');
-    cleaned = cleaned.replace(/<(?:think|thinking|thought)>[\s\S]*$/gi, '');
+    // Strip hidden chain-of-thought blocks: <think> / <thinking> / <thought> / <draft> / <!-- charThink/plotThink -->
+    cleaned = cleaned.replace(/<(think|thinking|thought|draft)>[\s\S]*?<\/\1>/gi, '');
+    cleaned = cleaned.replace(/<(?:think|thinking|thought|draft)>[\s\S]*$/gi, '');
+    cleaned = cleaned.replace(/<!--\s*(?:charThink|plotThink)[\s\S]*?-->/gi, '');
     cleaned = cleaned.replace(/\[\d{4}[-/年]\d{1,2}[-/月]\d{1,2}.*?\]/g, '');
     cleaned = cleaned.replace(/^[\w一-龥]+:\s*/, '');
     // Strip source tags leaked from history context, including model-mutated forms such as [聊chat].

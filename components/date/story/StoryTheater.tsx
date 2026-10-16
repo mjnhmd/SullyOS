@@ -17,6 +17,7 @@ import {
     storyTheaterThreadId,
     withBuiltInStoryPresets,
 } from '../../../utils/storyTheater';
+import { getGlobalActivePresetId, setGlobalActivePresetId } from '../../../utils/tavernPreset';
 import StoryMaskBox from './StoryMaskBox';
 import StoryPresetMaker from './StoryPresetMaker';
 import StoryTheaterEditor from './StoryTheaterEditor';
@@ -61,8 +62,9 @@ const StoryTheaterContent: React.FC<Props> = ({ onSwitchCompanion, onClose }) =>
             const source = await readShareFile(file, 'story');
             const imported = parseStoryTheaterPreset(await source.text(), source.name);
             await DB.saveStoryTheaterPreset(imported);
+            setGlobalActivePresetId(imported.id);
             setCustomPresets(current => [imported, ...current.filter(item => item.id !== imported.id)]);
-            addToast(`已导入糯米机剧情预设「${imported.name}」`, 'success');
+            addToast(`已导入并全局启用预设「${imported.name}」（聊天与见面同步生效）`, 'success');
             return imported;
         } catch (error: any) {
             addToast(error?.message || '预设导入失败', 'error');

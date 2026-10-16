@@ -30,6 +30,15 @@ import { getElevenLabsVoiceActingGuide } from './elevenLabsTts';
 import { isElevenLabsV4Model } from './elevenLabsModels';
 import { selectCharacterContextMessages } from './chatContextRange';
 import { buildCharacterResponsePrinciples } from './characterResponsePrinciples';
+import { DB } from './db';
+import { withBuiltInStoryPresets } from './storyTheater';
+import {
+    applyTavernRegexRules,
+    compilePresetForChatApp,
+    getGlobalPresetChatFormatOverride,
+    resolveEffectivePresetIdForChar,
+} from './tavernPreset';
+import type { TavernRegexRule } from '../types';
 
 /** Adapted from story preset character-polyphony / evidence-gate / user-agency.
  * In-person companionship permits a small beat; it does not require plot escalation.
@@ -766,7 +775,38 @@ ${extraBlock ? `\n${extraBlock}` : ''}${isObserveOn(char) ? `\n${buildObserveBlo
             char, user: userProfile, history: conversation,
             timeOptions: { skipTimeAwareness: !isDateTimeAwarenessOn(char), conversational: true, includeUserLocation: true },
         }));
+        // 读取全局启用预设或角色单独绑定的预设（一次导入，正常聊天与见面同步生效）
+        let datePresetPreBlock = '';
+        let datePresetPostMessages: Array<{ role: string; content: string }> = [];
+        const activeRegexRules: TavernRegexRule[] = [...(char.tavernRegexRules || [])];
+        const effectivePresetId = resolveEffectivePresetIdForChar(char.boundChatPresetId);
+        if (effectivePresetId) {
+            try {
+                const storedPresets = await DB.getStoryTheaterPresets();
+                const allPresets = withBuiltInStoryPresets(storedPresets);
+                const boundPreset = allPresets.find(p => p.id === effectivePresetId);
+                if (boundPreset?.document) {
+                    const allowFormatOverride = char.chatPresetAllowFormatOverride !== undefined
+                        ? char.chatPresetAllowFormatOverride === true
+                        : getGlobalPresetChatFormatOverride();
+                    const compiledPreset = compilePresetForChatApp(boundPreset.document, {
+                        userName: userProfile?.name || '对方',
+                        charName: char.name,
+                        allowFormatOverride,
+                    });
+                    datePresetPreBlock = compiledPreset.preHistorySystemBlock;
+                    datePresetPostMessages = compiledPreset.postHistoryMessages;
+                    if (compiledPreset.regexRules.length > 0) {
+                        activeRegexRules.push(...compiledPreset.regexRules);
+                    }
+                }
+            } catch (err) {
+                console.warn('[DatePreset] Failed to load bound preset:', err);
+            }
+        }
+
         const systemPrompt = context.coreContext
+            + datePresetPreBlock
             + buildVNModeBlock(char, userProfile?.name || '')
             + ContextBuilder.buildSARModuleContext(char, userProfile, 'date');
 
@@ -776,15 +816,31 @@ ${extraBlock ? `\n${extraBlock}` : ''}${isObserveOn(char) ? `\n${buildObserveBlo
             ? `(System Note: 严格遵守 VN 格式，每一行以 [emotion] 开头；逐行选择贴合实际表情的标签，明确情绪不要一律标 normal，同一情绪延续可重复。篇幅随本轮实际内容，可以简短。${focusLine})`
             : `(System Note: Reroll. 保持已有事实、角色性格与关系阶段，尝试另一种自然回应，不必加强情绪或推进关系。严格遵守 VN 格式，每一行以 [emotion] 开头；逐行选择贴合实际表情的标签，明确情绪不要一律标 normal，同一情绪延续可重复。${focusLine})`;
 
-        const messagesWithWorldbooks = context.history;
+        const rawMessagesWithWorldbooks = context.history;
+        const messagesWithWorldbooks = activeRegexRules.length > 0
+            ? rawMessagesWithWorldbooks.map((msg, idx, arr) => {
+                if (typeof msg.content !== 'string' || !msg.content.trim()) return msg;
+                if (msg.role !== 'user' && msg.role !== 'assistant') return msg;
+                const depth = arr.length - 1 - idx;
+                const transformed = applyTavernRegexRules(msg.content, activeRegexRules, {
+                    timing: 'prompt',
+                    role: msg.role === 'user' ? 'user' : 'ai',
+                    depth,
+                    userName: userProfile?.name || '对方',
+                    charName: char.name,
+                });
+                return transformed.trim() ? { ...msg, content: transformed } : msg;
+            })
+            : rawMessagesWithWorldbooks;
         // depth=0 会在末条用户消息之后插入世界书，不能给数组最后一项追加 VN 指令。
         const pendingMessage = conversation[conversation.length - 1];
         return {
             messages: [
                 { role: 'system', content: systemPrompt },
-                ...messagesWithWorldbooks.map(message => message === pendingMessage
-                    ? { ...message, content: `${userText}\n\n${note}` }
+                ...messagesWithWorldbooks.map((message, idx) => rawMessagesWithWorldbooks[idx] === pendingMessage
+                    ? { ...message, content: `${message.content}\n\n${note}` }
                     : message),
+                ...datePresetPostMessages,
                 { role: 'system', content: buildDateInteractionPrinciples(char.name, userProfile?.name || '对方') },
             ],
         };

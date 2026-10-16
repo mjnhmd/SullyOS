@@ -13,7 +13,8 @@ import {
 } from '../utils/worldbook';
 import { confirmExportSafety } from '../utils/exportGuard';
 import { shareOrDownloadFile } from '../utils/shareExport';
-import { readShareFile } from '../utils/pngShare';
+import { pngHasShare, readShareFile } from '../utils/pngShare';
+import { extractTavernCardFromPng, isPngBytes } from '../utils/tavernCard';
 import { trackEvent } from '../utils/analytics';
 
 const WorldbookApp: React.FC = () => {
@@ -62,6 +63,15 @@ const WorldbookApp: React.FC = () => {
     const [tempProbability, setTempProbability] = useState(100);
     const [tempCaseSensitive, setTempCaseSensitive] = useState(false);
     const [tempWholeWords, setTempWholeWords] = useState(false);
+    const [tempExcludeRecursion, setTempExcludeRecursion] = useState(false);
+    const [tempPreventRecursion, setTempPreventRecursion] = useState(false);
+    const [tempDelayUntilRecursion, setTempDelayUntilRecursion] = useState(false);
+    const [tempSticky, setTempSticky] = useState(0);
+    const [tempCooldown, setTempCooldown] = useState(0);
+    const [tempDelay, setTempDelay] = useState(0);
+    const [tempGroup, setTempGroup] = useState('');
+    const [tempGroupWeight, setTempGroupWeight] = useState(100);
+    const [tempGroupOverride, setTempGroupOverride] = useState(false);
 
     // Grouping Logic
     const groupedBooks = useMemo(() => {
@@ -111,6 +121,15 @@ const WorldbookApp: React.FC = () => {
         setTempProbability(100);
         setTempCaseSensitive(false);
         setTempWholeWords(false);
+        setTempExcludeRecursion(false);
+        setTempPreventRecursion(false);
+        setTempDelayUntilRecursion(false);
+        setTempSticky(0);
+        setTempCooldown(0);
+        setTempDelay(0);
+        setTempGroup('');
+        setTempGroupWeight(100);
+        setTempGroupOverride(false);
         setShowCategoryPicker(false);
         setIsEditing(true);
         trackEvent('打开世界书编辑页', { mode: 'create' });
@@ -135,6 +154,15 @@ const WorldbookApp: React.FC = () => {
         setTempProbability(book.probability ?? 100);
         setTempCaseSensitive(book.caseSensitive === true);
         setTempWholeWords(book.matchWholeWords === true);
+        setTempExcludeRecursion(book.excludeRecursion === true);
+        setTempPreventRecursion(book.preventRecursion === true);
+        setTempDelayUntilRecursion(book.delayUntilRecursion === true);
+        setTempSticky(book.sticky ?? 0);
+        setTempCooldown(book.cooldown ?? 0);
+        setTempDelay(book.delay ?? 0);
+        setTempGroup(book.group ?? '');
+        setTempGroupWeight(book.groupWeight ?? 100);
+        setTempGroupOverride(book.groupOverride === true);
         setShowCategoryPicker(false);
         setIsEditing(true);
         trackEvent('打开世界书编辑页', { mode: 'edit' });
@@ -169,6 +197,15 @@ const WorldbookApp: React.FC = () => {
             probability: Math.max(0, Math.min(100, tempProbability || 0)),
             caseSensitive: tempCaseSensitive,
             matchWholeWords: tempWholeWords,
+            excludeRecursion: tempExcludeRecursion,
+            preventRecursion: tempPreventRecursion,
+            delayUntilRecursion: tempDelayUntilRecursion,
+            sticky: Math.max(0, Math.floor(tempSticky || 0)),
+            cooldown: Math.max(0, Math.floor(tempCooldown || 0)),
+            delay: Math.max(0, Math.floor(tempDelay || 0)),
+            group: tempGroup.trim(),
+            groupWeight: Math.max(1, Math.floor(tempGroupWeight || 100)),
+            groupOverride: tempGroupOverride,
         };
 
         if (editingBook) {
@@ -196,16 +233,33 @@ const WorldbookApp: React.FC = () => {
     };
 
     const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
+        const files = Array.from(event.target.files || []);
+        if (files.length === 0) return;
         try {
-            const source = await readShareFile(file, 'worldbook');
-            const text = await source.text();
-            const category = source.name.replace(/\.json$/i, '').trim() || '导入世界书';
-            const imported = parseStandardWorldbook(text, category);
-            for (const book of imported) await addWorldbook(book);
-            addToast(`已导入 ${imported.length} 条世界书条目`, 'success');
-            setExpandedCategory(category);
+            let totalEntries = 0;
+            let lastCategory = '';
+            for (const file of files) {
+                const bytes = new Uint8Array(await file.arrayBuffer());
+                let text = '';
+                let fallbackCategory = file.name.replace(/\.(json|png)$/i, '').trim() || '导入世界书';
+                if ((isPngBytes(bytes) || /\.png$/i.test(file.name)) && !pngHasShare(bytes)) {
+                    const tavernCard = extractTavernCardFromPng(bytes);
+                    if (!tavernCard) throw new Error(`PNG 文件「${file.name}」中未找到酒馆角色卡或世界书数据`);
+                    text = JSON.stringify(tavernCard);
+                    const cardName = tavernCard?.data?.name || tavernCard?.name || fallbackCategory;
+                    fallbackCategory = `${cardName} 世界书`;
+                } else {
+                    const source = await readShareFile(file, 'worldbook');
+                    text = await source.text();
+                    fallbackCategory = source.name.replace(/\.json$/i, '').trim() || fallbackCategory;
+                }
+                const imported = parseStandardWorldbook(text, fallbackCategory);
+                for (const book of imported) await addWorldbook(book);
+                totalEntries += imported.length;
+                if (imported[0]?.category) lastCategory = imported[0].category;
+            }
+            addToast(`已导入 ${totalEntries} 条世界书条目`, 'success');
+            if (lastCategory) setExpandedCategory(lastCategory);
         } catch (error: any) {
             addToast(error?.message || '世界书导入失败', 'error');
         } finally {
@@ -588,6 +642,87 @@ const WorldbookApp: React.FC = () => {
                                 <span className="font-bold">未勾选“启用随机概率”不代表条目没有激活。</span>
                                 未勾选时会跳过随机判定：只要条目已启用且满足常驻／关键词条件，就会按 100% 通过；勾选后，才会在条件满足时按上方百分比再次随机判断。
                             </div>
+
+                            <details className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-3">
+                                <summary className="cursor-pointer text-xs font-bold text-slate-600 select-none">
+                                    酒馆高级触发 · 递归 / 权重组 / 时效控制
+                                </summary>
+                                <div className="mt-3 space-y-3 pt-3 border-t border-slate-200/70">
+                                    <div className="grid grid-cols-1 gap-2 text-xs text-slate-600">
+                                        <label className="flex items-center gap-2">
+                                            <input type="checkbox" checked={tempExcludeRecursion} onChange={e => setTempExcludeRecursion(e.target.checked)} className="accent-indigo-500" />
+                                            排除递归（不被其他世界书条目的内容递归激活）
+                                        </label>
+                                        <label className="flex items-center gap-2">
+                                            <input type="checkbox" checked={tempPreventRecursion} onChange={e => setTempPreventRecursion(e.target.checked)} className="accent-indigo-500" />
+                                            防止进一步递归（本条目的内容不再触发其他条目）
+                                        </label>
+                                        <label className="flex items-center gap-2">
+                                            <input type="checkbox" checked={tempDelayUntilRecursion} onChange={e => setTempDelayUntilRecursion(e.target.checked)} className="accent-indigo-500" />
+                                            仅在递归扫描时触发（Delay Until Recursion）
+                                        </label>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 mb-1 block">Inclusion Group</label>
+                                            <input
+                                                value={tempGroup}
+                                                onChange={e => setTempGroup(e.target.value)}
+                                                placeholder="互斥权重组名"
+                                                className="w-full text-xs text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 mb-1 block">组权重 (Weight)</label>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                value={tempGroupWeight}
+                                                onChange={e => setTempGroupWeight(Number(e.target.value))}
+                                                className="w-full text-xs text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none"
+                                            />
+                                        </div>
+                                        <div className="flex items-end pb-2">
+                                            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                                                <input type="checkbox" checked={tempGroupOverride} onChange={e => setTempGroupOverride(e.target.checked)} className="accent-indigo-500" />
+                                                组内优先覆盖
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 mb-1 block">Sticky (持续轮数)</label>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={tempSticky}
+                                                onChange={e => setTempSticky(Number(e.target.value))}
+                                                className="w-full text-xs text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 mb-1 block">Cooldown (冷却)</label>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={tempCooldown}
+                                                onChange={e => setTempCooldown(Number(e.target.value))}
+                                                className="w-full text-xs text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 mb-1 block">Delay (延迟轮数)</label>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={tempDelay}
+                                                onChange={e => setTempDelay(Number(e.target.value))}
+                                                className="w-full text-xs text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
 
                         <div className="bg-white rounded-[1.5rem] border border-slate-200/70 p-5 shadow-sm shadow-slate-200/40">
@@ -640,7 +775,7 @@ const WorldbookApp: React.FC = () => {
                                     {isSelecting ? '取消' : '管理'}
                                 </button>
                             )}
-                            <input ref={importRef} type="file" accept=".json,.png,application/json,image/png" className="hidden" onChange={handleImport} />
+                            <input ref={importRef} type="file" multiple accept=".json,.png,application/json,image/png" className="hidden" onChange={handleImport} />
                             <button
                                 onClick={() => { setShowImportConfirm(true); trackEvent('打开导入世界书弹窗'); }}
                                 className="w-9 h-9 bg-white/80 text-indigo-500 border border-white rounded-full shadow-sm flex items-center justify-center active:scale-90 transition-transform"

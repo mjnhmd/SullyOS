@@ -11789,7 +11789,8 @@ var renderRealtimeWorldBlock = (input) => {
   const specialDates = input.specialDates?.filter(Boolean) ?? [];
   const weather = input.weather ?? null;
   const news = input.news ?? [];
-  if (!timeLine && specialDates.length === 0 && !weather && news.length === 0) {
+  const userLocationText = input.userLocationText?.trim();
+  if (!timeLine && specialDates.length === 0 && !weather && news.length === 0 && !userLocationText) {
     return "";
   }
   const parts = [];
@@ -11807,6 +11808,10 @@ var renderRealtimeWorldBlock = (input) => {
     parts.push(`\u{1F324}\uFE0F \u3010${weather.city}\u5B9E\u65F6\u5929\u6C14\u3011`);
     parts.push(`\u73B0\u5728\u5916\u9762: ${weather.description}\uFF0C\u6C14\u6E29 ${weather.temp}\xB0C\uFF08\u4F53\u611F ${weather.feelsLike}\xB0C\uFF09\uFF0C\u6E7F\u5EA6 ${weather.humidity}%`);
     parts.push(`\u4F60\u7684\u5EFA\u8BAE: ${generateWeatherAdvice(weather)}`);
+  }
+  if (userLocationText) {
+    parts.push("");
+    parts.push(userLocationText);
   }
   if (news.length > 0) {
     parts.push("");

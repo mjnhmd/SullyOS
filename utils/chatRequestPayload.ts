@@ -44,6 +44,15 @@ import { isChatConversationEntry } from './memoryPalace/trace';
 import { loadCollaborationFileCabinetBlock } from '../features/collaboration/chatLibrary';
 import { buildSARUserSurfaceRequest, selectSARUserSurfaceTargets } from './vrWorld/sarUserSurface';
 import { getSARModuleRuntimePlan } from './vrWorld/sarModuleRuntime';
+import { DB } from './db';
+import { withBuiltInStoryPresets } from './storyTheater';
+import {
+    applyTavernRegexRules,
+    compilePresetForChatApp,
+    getGlobalPresetChatFormatOverride,
+    resolveEffectivePresetIdForChar,
+} from './tavernPreset';
+import type { TavernRegexRule } from '../types';
 
 export { cleanApiMessages, flattenImageContentParts } from './promptMessageCleanup';
 
@@ -444,7 +453,52 @@ export async function buildChatRequestPayload(input: BuildChatPayloadInput): Pro
         }
     }
 
-    const messagesWithWorldbookDepth = parts.history;
+    // ── 7. 全局启用预设 / 角色绑定预设 + 角色专属酒馆正则 ────────
+    let chatPresetPostMessages: Array<{ role: string; content: string }> = [];
+    const activeRegexRules: TavernRegexRule[] = [...(char.tavernRegexRules || [])];
+    const effectivePresetId = resolveEffectivePresetIdForChar(char.boundChatPresetId);
+    if (effectivePresetId) {
+        try {
+            const storedPresets = await DB.getStoryTheaterPresets();
+            const allPresets = withBuiltInStoryPresets(storedPresets);
+            const boundPreset = allPresets.find(p => p.id === effectivePresetId);
+            if (boundPreset?.document) {
+                const allowFormatOverride = char.chatPresetAllowFormatOverride !== undefined
+                    ? char.chatPresetAllowFormatOverride === true
+                    : getGlobalPresetChatFormatOverride();
+                const compiledPreset = compilePresetForChatApp(boundPreset.document, {
+                    userName: userProfile?.name || '你',
+                    charName: char.name,
+                    allowFormatOverride,
+                });
+                if (compiledPreset.preHistorySystemBlock) {
+                    systemPrompt += compiledPreset.preHistorySystemBlock;
+                }
+                chatPresetPostMessages = compiledPreset.postHistoryMessages;
+                if (compiledPreset.regexRules.length > 0) {
+                    activeRegexRules.push(...compiledPreset.regexRules);
+                }
+            }
+        } catch (err) {
+            console.warn('[ChatPreset] Failed to load bound chat preset:', err);
+        }
+    }
+
+    const messagesWithWorldbookDepth = activeRegexRules.length > 0
+        ? parts.history.map((msg, idx, arr) => {
+            if (typeof msg.content !== 'string' || !msg.content.trim()) return msg;
+            if (msg.role !== 'user' && msg.role !== 'assistant') return msg;
+            const depth = arr.length - 1 - idx;
+            const transformed = applyTavernRegexRules(msg.content, activeRegexRules, {
+                timing: 'prompt',
+                role: msg.role === 'user' ? 'user' : 'ai',
+                depth,
+                userName: userProfile?.name || '你',
+                charName: char.name,
+            });
+            return transformed.trim() ? { ...msg, content: transformed } : msg;
+        })
+        : parts.history;
 
     // ── 9. 麦当劳小程序上下文（购物车/菜单实时快照 → 易变尾段） ──
     const mcdActive = !!mcdMiniSnap?.open;
@@ -526,6 +580,7 @@ export async function buildChatRequestPayload(input: BuildChatPayloadInput): Pro
     let fullMessages: Array<{ role: string; content: any }> = [
         { role: 'system', content: systemPrompt },
         ...messagesWithWorldbookDepth,
+        ...chatPresetPostMessages,
         { role: 'system', content: volatileTail },
     ];
     if (bilingualActive) {
@@ -555,7 +610,7 @@ export async function buildChatRequestPayload(input: BuildChatPayloadInput): Pro
     // ChatApp refreshes this same block inside its tool loop. Home has one request,
     // so take the same task/receipt snapshot here, before the live-state tail.
     let amsg2ExpiredNoticeIds: string[] | undefined;
-    let volatileTailIndex = 1 + messagesWithWorldbookDepth.length;
+    let volatileTailIndex = 1 + messagesWithWorldbookDepth.length + chatPresetPostMessages.length;
     if (input.recallEntryPoint === 'home_3d' && char.activeMsg2Config?.enabled) {
         await prepare('tasks',async()=>{
         const { isAmsg2GlobalReady } = await import('./amsg2ToolBridge');

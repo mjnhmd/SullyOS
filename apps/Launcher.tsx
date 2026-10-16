@@ -536,7 +536,18 @@ const Launcher: React.FC<{ staticPreview?: boolean }> = ({ staticPreview = false
 
   const normalizeOrder = useCallback((saved: string[] | undefined, available: string[]) => {
       const valid = new Set(available);
-      return [...(saved || []).filter((id, index, all) => valid.has(id) && all.indexOf(id) === index), ...available.filter(id => !(saved || []).includes(id))];
+      const kept = (saved || []).filter((id, index, all) => valid.has(id) && all.indexOf(id) === index);
+      const missing = available.filter(id => !kept.includes(id));
+      // Put newly added Presets app on the first home screen (right after Date or at top of page 1) even for existing users with saved launcherAppOrder
+      if (missing.includes(AppID.Presets)) {
+          const restMissing = missing.filter(id => id !== AppID.Presets);
+          const dateIdx = kept.indexOf(AppID.Date);
+          const insertIdx = dateIdx >= 0 ? dateIdx + 1 : Math.min(6, kept.length);
+          const next = [...kept];
+          next.splice(insertIdx, 0, AppID.Presets);
+          return [...next, ...restMissing];
+      }
+      return [...kept, ...missing];
   }, []);
 
   const availableGridIds = useMemo(() => availableGridApps.map(app => app.id), [availableGridApps]);

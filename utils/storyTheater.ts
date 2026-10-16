@@ -15,6 +15,19 @@ import {
     type WorldbookScanMessage,
 } from './worldbook';
 import { shareOrDownloadFile } from './shareExport';
+import {
+    applyTavernRegexRules,
+    convertNuojijiPresetToSullyDocument,
+    convertSillyTavernPresetToSullyDocument,
+    createTavernVariableStore,
+    expandTavernMacros,
+    getGlobalActivePresetId,
+    isNuojijiPresetJson,
+    isSillyTavernPresetJson,
+    setGlobalActivePresetId,
+    type TavernMacroVariableStore,
+} from './tavernPreset';
+import { parseTavernRegexScripts } from './tavernCard';
 
 export type StoryApiRole = 'system' | 'user' | 'assistant';
 export interface StoryApiMessage { role: StoryApiRole; content: string; }
@@ -171,27 +184,31 @@ export const makeStoryTheaterFileName = (title: string, now: number = Date.now()
     return `${safeTitle}_剧情记录_${formatStoryExportTime(now).slice(0, 10)}.txt`;
 };
 
-export const createStoryTheaterDraft = (now: number = Date.now()): StoryTheaterEntry => ({
-    id: makeStoryTheaterId(),
-    title: '',
-    premise: '',
-    openingMode: 'user',
-    mask: { type: 'user' },
-    characterIds: [],
-    writesToCharacterMemory: false,
-    characterMemoryDates: {},
-    carryCharacterMemory: false,
-    characterContextLimits: {},
-    archiveAfter: 40,
-    archiveKeepRecent: 5,
-    archiveStrategy: 'summary',
-    archives: [],
-    selectedWorldbookIds: [],
-    forceUserLastMessage: false,
-    omitSamplingParams: false,
-    createdAt: now,
-    updatedAt: now,
-});
+export const createStoryTheaterDraft = (now: number = Date.now()): StoryTheaterEntry => {
+    const globalPresetId = getGlobalActivePresetId();
+    return {
+        id: makeStoryTheaterId(),
+        title: '',
+        premise: '',
+        openingMode: 'user',
+        mask: { type: 'user' },
+        characterIds: [],
+        writesToCharacterMemory: false,
+        characterMemoryDates: {},
+        carryCharacterMemory: false,
+        characterContextLimits: {},
+        archiveAfter: 40,
+        archiveKeepRecent: 5,
+        archiveStrategy: 'summary',
+        archives: [],
+        selectedWorldbookIds: [],
+        ...(globalPresetId ? { presetId: globalPresetId } : {}),
+        forceUserLastMessage: false,
+        omitSamplingParams: false,
+        createdAt: now,
+        updatedAt: now,
+    };
+};
 
 /** 老数据/手改 JSON 的温和补全；不改变已经选择的沙盒开关。 */
 export const normalizeStoryTheater = (entry: StoryTheaterEntry): StoryTheaterEntry => {
@@ -303,6 +320,7 @@ const normalizeDocument = (value: any, fallbackName: string): StoryTheaterPreset
         ...(NATIVE_MARKERS.includes(prompt?.marker) ? { marker: prompt.marker } : {}),
     }));
     if (prompts.length === 0) throw new Error('预设中没有提示词条目');
+    const regexRules = Array.isArray(value.regexRules) ? parseTavernRegexScripts(value.regexRules) : undefined;
     return {
         schema: 'sullyos.story-preset',
         version: 1,
@@ -317,6 +335,7 @@ const normalizeDocument = (value: any, fallbackName: string): StoryTheaterPreset
         },
         prompts,
         assistantPrefill: String(value.assistantPrefill || ''),
+        ...(regexRules && regexRules.length > 0 ? { regexRules } : {}),
     };
 };
 
@@ -541,9 +560,17 @@ export const parseStoryTheaterPreset = (rawText: string, sourceFileName: string,
     if (rawText.length > 5 * 1024 * 1024) throw new Error('预设超过 5 MB，请先移除内嵌素材或脚本数据');
     let data: Record<string, any>;
     try { data = JSON.parse(rawText); } catch { throw new Error('不是有效的 JSON 预设'); }
-    const fileBase = sourceFileName.replace(/\.json$/i, '').trim() || '导入预设';
-    if (data.schema !== 'sullyos.story-preset') throw new Error('只接受糯米机剧情预设（schema: sullyos.story-preset）');
-    const document = normalizeDocument(data, fileBase);
+    const fileBase = sourceFileName.replace(/\.(?:sully\.json|nuopreset\.json|json)$/i, '').trim() || '导入预设';
+    let document: StoryTheaterPresetDocument;
+    if (data?.schema === 'sullyos.story-preset') {
+        document = normalizeDocument(data, fileBase);
+    } else if (isSillyTavernPresetJson(data)) {
+        document = normalizeDocument(convertSillyTavernPresetToSullyDocument(data, fileBase), fileBase);
+    } else if (isNuojijiPresetJson(data)) {
+        document = normalizeDocument(convertNuojijiPresetToSullyDocument(data, fileBase), fileBase);
+    } else {
+        throw new Error('不支持的预设格式（支持酒馆 SillyTavern 预设、糯叽机预设与糯米机 sullyos.story-preset）');
+    }
     return { id: makeStoryTheaterId(), name: document.name, sourceFileName, format: 'sullyos-story-preset', document, createdAt: now, updatedAt: now };
 };
 
@@ -692,10 +719,12 @@ export const applyStoryPresetChoice = (
     prompts: document.prompts.map(prompt => optionIds.includes(prompt.id) ? { ...prompt, enabled: prompt.id === selectedId } : prompt),
 });
 
-const macroReplace = (text: string, userName: string, characterNames: string[]): string => text
-    .replace(/\{\{user\}\}/gi, userName || '你')
-    .replace(/\{\{char\}\}/gi, characterNames.join('、') || '角色')
-    .replace(/\{\{group\}\}/gi, characterNames.join('、') || '角色');
+const macroReplace = (
+    text: string,
+    userName: string,
+    characterNames: string[],
+    store?: TavernMacroVariableStore,
+): string => expandTavernMacros(text, { userName, characterNames, store });
 
 export const STORY_MINI_THEATER_PROMPT_IDS = [
     'nmj-v3-theater-ai',
@@ -1020,8 +1049,25 @@ export const compileStoryPreset = (input: {
     );
 
     // 糯米机原生 Prompt Manager 按数组顺序送出；同一个 marker 只注入一次，
-    // 角色资料始终使用一份完整的沙盒上下文。
+    // 角色资料始终使用一份完整的沙盒上下文。同时按由上到下顺序维护酒馆变量宏作用域。
+    const varStore = createTavernVariableStore();
     const injectedMarkers = new Set<string>();
+    const preparedHistory = input.historyMessages
+        ? input.historyMessages.map((msg, idx, arr) => {
+            if (!document.regexRules?.length) return msg;
+            const depth = arr.length - 1 - idx;
+            const role: 'user' | 'ai' = msg.role === 'user' ? 'user' : 'ai';
+            const transformed = applyTavernRegexRules(msg.content, document.regexRules, {
+                timing: 'prompt',
+                role,
+                depth,
+                userName,
+                charName: characterNames.join('、'),
+            });
+            return transformed.trim() ? { ...msg, content: transformed } : msg;
+        })
+        : undefined;
+
     for (let index = 0; index < document.prompts.length; index += 1) {
         const prompt = document.prompts[index];
         if (
@@ -1031,7 +1077,7 @@ export const compileStoryPreset = (input: {
             pushPromptMessage(
                 messages,
                 enabledWorldBeforePrompt?.role || 'system',
-                macroReplace(slots.worldBefore, userName, characterNames),
+                macroReplace(slots.worldBefore, userName, characterNames, varStore),
             );
             injectedMarkers.add('world_before');
         }
@@ -1040,23 +1086,25 @@ export const compileStoryPreset = (input: {
         if (prompt.marker) {
             if (injectedMarkers.has(prompt.marker)) continue;
             injectedMarkers.add(prompt.marker);
-            if (prompt.marker === 'history' && input.historyMessages) {
-                messages.push(...input.historyMessages);
+            if (prompt.marker === 'history' && preparedHistory) {
+                messages.push(...preparedHistory);
                 continue;
             }
             raw = slotForMarker(prompt.marker, slots);
         }
         if (!raw.trim()) continue;
-        pushPromptMessage(messages, prompt.role, macroReplace(raw, userName, characterNames));
+        const expanded = macroReplace(raw, userName, characterNames, varStore);
+        if (!expanded.trim()) continue;
+        pushPromptMessage(messages, prompt.role, expanded);
     }
 
     // 兼容没有任何原生槽位的旧自定义预设，确保角色设定前世界书不会静默丢失。
     if (shouldBackfillWorldBefore && firstEnabledCharacterIndex < 0 && !injectedMarkers.has('world_before')) {
-        messages.unshift({ role: 'system', content: macroReplace(slots.worldBefore, userName, characterNames).trim() });
+        messages.unshift({ role: 'system', content: macroReplace(slots.worldBefore, userName, characterNames, varStore).trim() });
     }
 
     const prefill = String(document.assistantPrefill || '').trim();
-    const assistantPrefill = prefill ? { role: 'assistant' as const, content: macroReplace(prefill, userName, characterNames) } : undefined;
+    const assistantPrefill = prefill ? { role: 'assistant' as const, content: macroReplace(prefill, userName, characterNames, varStore) } : undefined;
 
     return {
         messages,
@@ -1211,14 +1259,19 @@ export const storyTheaterMemoryRecipientIds = (entry: StoryTheaterEntry): string
 
 const DISPLAY_BLOCK_META: Record<string, { kind: StoryDisplayBlockKind; title?: string }> = {
     scene_header: { kind: 'scene', title: '这一幕' },
+    scene_time: { kind: 'scene', title: '这一幕' },
     story_text: { kind: 'story' },
+    now_plot: { kind: 'story' },
     backstage: { kind: 'backstage', title: '幕后层' },
+    draft: { kind: 'backstage', title: '思维草稿' },
     mind_weather: { kind: 'backstage', title: '内心气象' },
+    summary: { kind: 'backstage', title: '本轮摘要' },
     worldline: { kind: 'worldline', title: '世界线' },
     world_line: { kind: 'worldline', title: '世界线' },
     shot_debts: { kind: 'debts', title: '尚未偿还的镜头' },
     mini_theater: { kind: 'theater', title: '幕间剧场' },
     reply_choices: { kind: 'choices', title: '可以这样推进' },
+    action: { kind: 'choices', title: '可以这样推进' },
     affinity_panel: { kind: 'affinity', title: '关系变化' },
 };
 
@@ -1320,7 +1373,7 @@ const formatTaggedStoryFragment = (fragment: string): string => {
             const inner = body.trim();
             if (!inner) return '';
             if (HIDDEN_STORY_DISPLAY_TAGS.has(tag)) return '';
-            if (tag === 'story_text' || tag === 'text') return inner;
+            if (tag === 'story_text' || tag === 'now_plot' || tag === 'text') return inner;
             return label ? `\n${label}：${inner}\n` : `\n${inner}\n`;
         });
     }
@@ -1335,9 +1388,10 @@ const formatTaggedStoryFragment = (fragment: string): string => {
 
 /** 将模型的 XML 风格排版协议变成纯文本展示块；原始消息仍原样参与下一轮上下文。 */
 export const parseStoryDisplayBlocks = (content: string): StoryDisplayBlock[] => {
-    const source = String(content || '');
     const blocks: StoryDisplayBlock[] = [];
-    const topLevel = /<(scene_header|story_text|backstage|mind_weather|worldline|world_line|shot_debts|mini_theater|reply_choices|affinity_panel)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi;
+    const sourceClean = String(content || '').replace(/<!--[\s\S]*?-->/g, '');
+    const topLevel = /<(scene_header|scene_time|story_text|now_plot|backstage|draft|summary|mind_weather|worldline|world_line|shot_debts|mini_theater|reply_choices|action|affinity_panel)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi;
+    const source = sourceClean;
     let cursor = 0;
     let match: RegExpExecArray | null;
     const push = (kind: StoryDisplayBlockKind, text: string, title?: string) => {

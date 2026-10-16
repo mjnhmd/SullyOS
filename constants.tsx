@@ -36,6 +36,7 @@ import {
   Planet,
   Wrench,
   HouseLine,
+  SlidersHorizontal,
 } from '@phosphor-icons/react';
 
 // SVG 图标库 - Phosphor Icons
@@ -58,6 +59,7 @@ export const Icons: Record<string, React.FC<{ className?: string }>> = {
   FAQ: ({ className }) => <Question className={className} weight="regular" />,
   Game: ({ className }) => <GameController className={className} weight="regular" />,
   Worldbook: ({ className }) => <Globe className={className} weight="regular" />,
+  Presets: ({ className }) => <SlidersHorizontal className={className} weight="regular" />,
   Novel: ({ className }) => <PenNib className={className} weight="regular" />,
   Bank: ({ className }) => <PiggyBank className={className} weight="regular" />,
   XhsFreeRoam: ({ className }) => <Compass className={className} weight="regular" />,
@@ -90,6 +92,7 @@ export const INSTALLED_APPS: AppConfig[] = [
   { id: AppID.CheckPhone, name: '查手机', icon: 'CheckPhone', color: 'slate' },
   // { id: AppID.Browser, name: '浏览器', icon: 'Browser', color: 'blue' }, // Hidden
   { id: AppID.Date, name: '见面', icon: 'Date', color: 'pink' },
+  { id: AppID.Presets, name: '预设', icon: 'Presets', color: 'violet' },
   { id: AppID.User, name: '档案', icon: 'User', color: 'blue' },
   { id: AppID.Bank, name: '存钱罐', icon: 'Bank', color: 'lime' }, // Hidden
   { id: AppID.Journal, name: '交换日记', icon: 'Journal', color: 'amber' },

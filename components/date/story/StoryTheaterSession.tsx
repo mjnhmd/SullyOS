@@ -59,6 +59,7 @@ import { incrementDigestRound, runCognitiveDigestion } from '../../../utils/memo
 import StoryQuickPresetPanel from './StoryQuickPresetPanel';
 import { StoryAppearanceButton } from './StoryTheaterTheme';
 import { shareOrDownloadFile } from '../../../utils/shareExport';
+import { applyTavernRegexRules } from '../../../utils/tavernPreset';
 import {
     buildStoryContinueInstruction,
     MEETING_CONTINUE_DISPLAY_TEXT,
@@ -703,7 +704,16 @@ const StoryTheaterSession: React.FC<Props> = ({ entry, preset, masks, onBack, on
             const multiAffinityGuide = affinityEnabled ? buildStoryMultiAffinityGuide(actors.map(actor => ({ id: actor.id, name: actor.name }))) : '';
             const affinityAwarenessReminder = affinityInputs.map(item => buildStoryAffinityAwarenessReminder(item, item.characterName || '当前角色')).filter(Boolean).join('\n\n');
             const identityGuard = buildStoryIdentityGuard(effectivePreset.document, promptIdentityName, actors.map(actor => actor.name));
-            const modelInput = appendStoryAffinityInputs(modelText, affinityInputs);
+            const rawModelInput = appendStoryAffinityInputs(modelText, affinityInputs);
+            const modelInput = effectivePreset.document.regexRules?.length
+                ? (applyTavernRegexRules(rawModelInput, effectivePreset.document.regexRules, {
+                    timing: 'prompt',
+                    role: 'user',
+                    depth: 0,
+                    userName: promptIdentityName,
+                    charName: actors.map(actor => actor.name).join('、'),
+                }).trim() || rawModelInput)
+                : rawModelInput;
             const historyMessages = buildStoryHistory(visibleHistory).map(message => ({
                 ...message,
                 content: '[' + (message.role === 'user' ? promptIdentityName + '给出的推进（用户侧）' : '上一层剧场正文') + ']\n' + message.content,
