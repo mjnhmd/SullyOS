@@ -39,3 +39,7 @@
 - 构建验证：`pnpm run build:chat-preview && pnpm run build:workers && npx vite build --mode capacitor` 通过。
 - APK 签名校验：`apksigner verify --verbose /Users/mengjingnan/Desktop/SullyOS-Android-v3.5.11-tavern-compat.apk`（v1/v2/v3 签名校验通过）。
 - POPO 发送回查：已发送至 `haomengdi@corp.netease.com` 且回查确认送达。
+
+### 3.4 修复进入 Chat 崩溃 `ReferenceError: useEffect is not defined` 与动森图标 TDZ
+- **根因**：`/Users/mengjingnan/SullyOS/components/chat/ChatModals.tsx` 第 289 行使用了 `useEffect` 加载聊天预设列表，但顶部 `import React, { useRef, useState } from 'react'` 漏导入了 `useEffect`，导致渲染 `ChatModals` 时直接抛 `ReferenceError: useEffect is not defined`。同时通过 `tsc --noEmit` 排查出 `/Users/mengjingnan/SullyOS/components/os/acnhIcons.tsx` 中 `ACNH_ICON_MAP` 引用 `slidersGlyph` 早于其 `const` 声明位置（切换到动森图标主题时会触发 TDZ 报错）。
+- **修复**：在 `/Users/mengjingnan/SullyOS/components/chat/ChatModals.tsx` 补齐 `useEffect` 导入；将 `/Users/mengjingnan/SullyOS/components/os/acnhIcons.tsx` 中的 `slidersGlyph` 移至 `ACNH_ICON_MAP` 之前定义；清理 `/Users/mengjingnan/SullyOS/utils/tavernPreset.ts` 的类型导入路径。

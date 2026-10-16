@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Modal from '../os/Modal';
 import TokenImg from '../os/TokenImg';
 import { CharacterProfile, Message, EmojiCategory, DailySchedule, ScheduleSlot, ApiPreset, APIConfig } from '../../types';

@@ -1,9 +1,9 @@
+import type { StoryApiRole } from './storyTheater';
 import type {
-    StoryApiRole,
     StoryTheaterPresetDocument,
     StoryTheaterPresetPrompt,
-} from './storyTheater';
-import type { TavernRegexRule } from '../types';
+    TavernRegexRule,
+} from '../types';
 import { parseTavernRegexScripts } from './tavernCard';
 
 const ST_VARIABLE_MACRO_RE = /\{\{(get|set|add|inc|dec)(global)?var::([^:}]+?)(?:::([\s\S]*?))?\}\}/gi;

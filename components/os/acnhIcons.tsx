@@ -56,6 +56,12 @@ const paletteGlyph = <>
   <circle cx="38" cy="42" r="5" fill="#FC736D" /><circle cx="55" cy="36" r="5" fill="#F7CD67" /><circle cx="66" cy="48" r="5" fill="#82D5BB" />
 </>;
 
+const slidersGlyph = <>
+  <rect x="22" y="33" width="56" height="6" rx="3" fill={CREAM} /><circle cx="62" cy="36" r="8" fill={CREAM} stroke={BROWN} strokeWidth="3.5" />
+  <rect x="22" y="50" width="56" height="6" rx="3" fill={CREAM} /><circle cx="38" cy="53" r="8" fill={CREAM} stroke={BROWN} strokeWidth="3.5" />
+  <rect x="22" y="67" width="56" height="6" rx="3" fill={CREAM} /><circle cx="66" cy="70" r="8" fill={CREAM} stroke={BROWN} strokeWidth="3.5" />
+</>;
+
 const ACNH_ICON_MAP: Partial<Record<AppID, React.ReactNode>> = {
   [AppID.Chat]: draw([9, 24, 91, 72], <>
     <path d="M24 24 H76 a15 15 0 0 1 15 15 v13 a15 15 0 0 1 -15 15 H56 l-6 10 -6 -10 H24 a15 15 0 0 1 -15 -15 v-13 a15 15 0 0 1 15 -15Z" fill={CREAM} />
@@ -173,11 +179,6 @@ const handGlyph = <>
 const refreshGlyph = <>
   <path d="M28 50 A22 22 0 1 1 38 69" fill="none" stroke={CREAM} strokeWidth="8" strokeLinecap="round" />
   <path d="M22 32 L34 32 L28 46Z" fill={CREAM} />
-</>;
-const slidersGlyph = <>
-  <rect x="22" y="33" width="56" height="6" rx="3" fill={CREAM} /><circle cx="62" cy="36" r="8" fill={CREAM} stroke={BROWN} strokeWidth="3.5" />
-  <rect x="22" y="50" width="56" height="6" rx="3" fill={CREAM} /><circle cx="38" cy="53" r="8" fill={CREAM} stroke={BROWN} strokeWidth="3.5" />
-  <rect x="22" y="67" width="56" height="6" rx="3" fill={CREAM} /><circle cx="66" cy="70" r="8" fill={CREAM} stroke={BROWN} strokeWidth="3.5" />
 </>;
 const bookGlyph2 = <>
   <path d="M50 30 C42 24 28 24 21 28 V75 C28 71 42 71 50 77 C58 71 72 71 79 75 V28 C72 24 58 24 50 30Z" fill={CREAM} />
