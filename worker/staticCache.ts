@@ -31,6 +31,7 @@ export function isPublicExternalAsset(url: URL): boolean {
   }
   if (url.hostname === 'raw.githubusercontent.com') return url.pathname.startsWith('/qegj567-cloud/SullyOS-assets/');
   if (url.hostname === 'cdn.statically.io') return url.pathname.startsWith('/gh/qegj567-cloud/SullyOS-assets/');
+  if (url.hostname === 'ydschool-video.nosdn.127.net' || url.hostname === 'nos.netease.com') return true;
   return url.hostname === 'unpkg.com' && url.pathname.startsWith('/katex@0.16.9/dist/');
 }
 

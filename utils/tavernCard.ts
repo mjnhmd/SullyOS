@@ -253,11 +253,34 @@ export function isTavernCharacterJson(raw: any): boolean {
     );
 }
 
+const NON_CHARACTER_TITLE_RE = /(?:世界观|世界书|设定|规则|规范|约束|状态|系统|主页|图鉴|目录|说明|指南|总览|速览|背景|简介|玩法|指令|格式|插图|战斗|骰子|思维链|输出|变量|初始化|面板|菜单|正则|脚本|author|note|system|rule|status|world|lore|guide|menu|index)/i;
+
+function normalizeCandidateCharacterName(raw: string): string {
+    return String(raw || '')
+        .trim()
+        .replace(/^[【\[《「『（(]+|[】\]》」』）)]+$/g, '')
+        .replace(/^(?:角色|人物|姓名|女主|男主|主要角色|登场角色|攻略对象)\s*[:：·\-]\s*/i, '')
+        .replace(/(?:的?(?:角色|人物)?(?:设定|档案|简介|资料|面板|属性|线|篇|开局|开场|日常|故事|主线|支线|结局|立绘|状态|内心状态分析|好感度)|nsfw|sfw)$/i, '')
+        .trim();
+}
+
+function isLikelyPersonName(name: string): boolean {
+    const clean = String(name || '').trim();
+    if (!clean || clean.length < 2 || clean.length > 12) return false;
+    if (NON_CHARACTER_TITLE_RE.test(clean)) return false;
+    if (/^[0-9_\-\s]+$/.test(clean)) return false;
+    return /^[\u4e00-\u9fa5A-Za-z·•\s]{2,12}$/.test(clean);
+}
+
 /**
- * Extract per-character portrait URLs embedded in tavern regex scripts
- * (e.g. `baseUrls` + `imageUrlMap` or `charactersData` in 县城).
+ * Extract per-character portrait URLs embedded in tavern regex scripts, worldbooks, or description
+ * (supports baseUrls/imageUrlMap, charactersData, Markdown images ![name](url), and HTML <img alt="name" src="url">).
  */
-function extractCharacterAvatarsFromRegexRules(regexRules: TavernRegexRule[]): Map<string, string> {
+function extractCharacterAvatarsFromCard(
+    regexRules: TavernRegexRule[],
+    worldbooks: Worldbook[],
+    description: string,
+): Map<string, string> {
     const avatarMap = new Map<string, string>();
     for (const rule of regexRules) {
         const src = rule.replacement || '';
@@ -265,7 +288,7 @@ function extractCharacterAvatarsFromRegexRules(regexRules: TavernRegexRule[]): M
 
         // 1. Parse baseUrls dictionary: key: 'https://...'
         const baseUrls = new Map<string, string>();
-        const baseBlockMatch = src.match(/const\s+baseUrls\s*=\s*\{([\s\S]*?)\};/);
+        const baseBlockMatch = src.match(/(?:const|let|var)\s+baseUrls\s*=\s*\{([\s\S]*?)\};/);
         if (baseBlockMatch) {
             const pairRe = /([\w$]+)\s*:\s*['"](https?:\/\/[^'"\s]+)['"]/g;
             let pm: RegExpExecArray | null;
@@ -275,15 +298,14 @@ function extractCharacterAvatarsFromRegexRules(regexRules: TavernRegexRule[]): M
         }
 
         // 2. Parse imageUrlMap: '角色名': { uniform: `${baseUrls.xxx}/xxx_uniform.png`, ... }
-        const mapBlockMatch = src.match(/const\s+imageUrlMap\s*=\s*\{([\s\S]*?)\n\s*\};/);
+        const mapBlockMatch = src.match(/(?:const|let|var)\s+imageUrlMap\s*=\s*\{([\s\S]*?)\n\s*\};/);
         if (mapBlockMatch) {
             const entryRe = /['"]([^"'\n]+)['"]\s*:\s*\{([\s\S]*?)\}/g;
             let em: RegExpExecArray | null;
             while ((em = entryRe.exec(mapBlockMatch[1])) !== null) {
                 const charName = em[1].trim();
                 const body = em[2];
-                // Prefer daily -> uniform -> outing -> first non-nsfw URL
-                const variantOrder = ['daily', 'uniform', 'outing'];
+                const variantOrder = ['daily', 'uniform', 'outing', 'normal', 'default'];
                 let resolvedUrl = '';
                 for (const vKey of variantOrder) {
                     const vMatch = body.match(new RegExp(vKey + "\\s*:\\s*[\x60\"\x27]([^\x60\"\x27]+)[\x60\"\x27]"));
@@ -310,56 +332,192 @@ function extractCharacterAvatarsFromRegexRules(regexRules: TavernRegexRule[]): M
             }
         }
     }
+
+    // 4. Generic Markdown ![角色名](https://...) or HTML <img alt="角色名" src="https://..."> in worldbooks / description
+    const textSources = [description, ...worldbooks.map(w => `${w.title}\n${w.content}`)];
+    for (const txt of textSources) {
+        if (!txt) continue;
+        const mdImgRe = /!\[([^\]]{2,15})\]\((https?:\/\/[^)\s]+)\)/g;
+        let mm: RegExpExecArray | null;
+        while ((mm = mdImgRe.exec(txt)) !== null) {
+            const cName = normalizeCandidateCharacterName(mm[1]);
+            if (isLikelyPersonName(cName) && !avatarMap.has(cName)) {
+                avatarMap.set(cName, mm[2]);
+            }
+        }
+        const htmlImgRe = /<img\b[^>]*?alt=['"]([^'"]{2,15})['"][^>]*?src=['"](https?:\/\/[^'"\s]+)['"]/gi;
+        let hm: RegExpExecArray | null;
+        while ((hm = htmlImgRe.exec(txt)) !== null) {
+            const cName = normalizeCandidateCharacterName(hm[1]);
+            if (isLikelyPersonName(cName) && !avatarMap.has(cName)) {
+                avatarMap.set(cName, hm[2]);
+            }
+        }
+    }
+
     return avatarMap;
 }
 
 /**
- * Extract per-character short descriptions from worldbooks (e.g. `人物速览` entry or character entry).
+ * Extract known character names, per-character short summaries, and dedicated worldbook lore from worldbooks & card description.
  */
-function extractCharacterSummariesFromWorldbooks(worldbooks: Worldbook[]): Map<string, string> {
+function extractCharacterRosterFromCard(
+    worldbooks: Worldbook[],
+    description: string,
+    cardTitle: string,
+): {
+    knownNames: Set<string>;
+    summaryMap: Map<string, string>;
+    loreMap: Map<string, string>;
+} {
+    const knownNames = new Set<string>();
     const summaryMap = new Map<string, string>();
+    const loreMap = new Map<string, string>();
+
+    // 1. Scan worldbook entries
     for (const wb of worldbooks) {
-        const title = (wb.title || '').trim();
-        const content = wb.content || '';
-        if (title === '人物速览' || content.includes('人物速览:')) {
-            const lineRe = /^\s*([\u4e00-\u9fa5A-Za-z0-9·]{2,10})\s*[:：]\s*["“]?([^"”\r\n]+)["”]?\s*$/gm;
+        const rawTitle = (wb.title || '').trim();
+        const content = (wb.content || '').trim();
+        if (!content) continue;
+
+        // 1a. Roster summary lists (e.g. 人物速览 / 角色列表 / 登场人物)
+        if (/(?:人物|角色)(?:速览|列表|简介|一览|总览|介绍)/.test(rawTitle) || content.includes('人物速览:') || content.includes('角色速览:')) {
+            const lineRe = /^\s*(?:[-*•]|\d+\.)?\s*([\u4e00-\u9fa5A-Za-z·]{2,10})\s*[:：]\s*["“]?([^"”\r\n]+)["”]?\s*$/gm;
             let lm: RegExpExecArray | null;
             while ((lm = lineRe.exec(content)) !== null) {
                 const cName = lm[1].trim();
                 const desc = lm[2].trim();
-                if (cName && desc && cName !== '人物速览') {
-                    summaryMap.set(cName, desc);
+                if (isLikelyPersonName(cName) && cName !== cardTitle && desc) {
+                    knownNames.add(cName);
+                    if (!summaryMap.has(cName)) summaryMap.set(cName, desc);
+                }
+            }
+        }
+
+        // 1b. Individual character worldbook entry (e.g. title is "张子薇" or "【角色】张子薇" or keys=[cName] with persona fields)
+        if (!rawTitle.toLowerCase().endsWith('nsfw') && !rawTitle.includes('内心状态')) {
+            const cand = normalizeCandidateCharacterName(rawTitle);
+            const hasPersonaSignal = /(?:性格|外貌|年龄|身高|身份|背景|喜好|简介|职业|核心|关系|台词|说话|persona|age|appearance|personality)/i.test(content);
+            const keyMatchesTitle = Array.isArray(wb.key) && wb.key.some(k => normalizeCandidateCharacterName(k) === cand);
+            if (isLikelyPersonName(cand) && cand !== cardTitle && (hasPersonaSignal || keyMatchesTitle)) {
+                knownNames.add(cand);
+                if (!loreMap.has(cand)) {
+                    loreMap.set(cand, content);
+                }
+                if (!summaryMap.has(cand)) {
+                    const firstMeaningfulLine = content
+                        .split(/\r?\n/)
+                        .map(l => l.replace(/^[#\-*•>\s]+/, '').trim())
+                        .find(l => l.length >= 4 && !/^(?:---|===|\{|\}|\[|\])$/.test(l));
+                    if (firstMeaningfulLine) {
+                        summaryMap.set(cand, firstMeaningfulLine.slice(0, 100));
+                    }
                 }
             }
         }
     }
-    return summaryMap;
+
+    // 2. Scan description for markdown/bracket character sections if worldbooks were empty
+    if (knownNames.size < 2 && description) {
+        const headingRe = /^(?:#{2,4}\s*|【(?:角色|人物)?\s*)([\u4e00-\u9fa5A-Za-z·]{2,10})(?:】|\s*$)/gm;
+        let hm: RegExpExecArray | null;
+        while ((hm = headingRe.exec(description)) !== null) {
+            const cand = normalizeCandidateCharacterName(hm[1]);
+            if (isLikelyPersonName(cand) && cand !== cardTitle) {
+                knownNames.add(cand);
+            }
+        }
+    }
+
+    return { knownNames, summaryMap, loreMap };
 }
 
 /**
  * Identify which character a greeting belongs to when a card is a multi-character ensemble card.
+ * Universal across all SillyTavern multi-character greeting conventions!
  */
-function detectGreetingCharacterName(greeting: string, knownCharNames: Set<string>): string | null {
+function detectGreetingCharacterName(greeting: string, knownCharNames: Set<string>, cardTitle: string): string | null {
     const text = (greeting || '').trim();
     if (!text) return null;
 
-    // 1. Check <SceneInfo> 在场角色: - 角色名|服装
-    const sceneMatch = text.match(/<SceneInfo>([\s\S]*?)<\/SceneInfo>/i);
+    // 1. Check <SceneInfo> or XML/YAML-like scene header: 在场角色 / 登场角色 / 当前角色 / 人物
+    const sceneMatch = text.match(/<(?:SceneInfo|scene|scene_info|status|info)>([\s\S]*?)<\/(?:SceneInfo|scene|scene_info|status|info)>/i);
     if (sceneMatch) {
         const sceneBody = sceneMatch[1];
-        const roleLines = Array.from(sceneBody.matchAll(/^\s*-\s*([^|\r\n]+?)(?:\|[^\r\n]*)?$/gm));
+        const roleLines = Array.from(sceneBody.matchAll(/^\s*-\s*([^|\r\n:：]+?)(?:\|[^\r\n]*)?$/gm));
         if (roleLines.length > 0) {
-            const firstRole = roleLines[0][1].trim();
-            if (firstRole) return firstRole;
+            const firstRole = normalizeCandidateCharacterName(roleLines[0][1]);
+            if (isLikelyPersonName(firstRole)) return firstRole;
+        }
+        const inlineRole = sceneBody.match(/(?:在场角色|登场角色|当前角色|角色|人物)\s*[:：]\s*([^\r\n|<]+)/);
+        if (inlineRole) {
+            const firstRole = normalizeCandidateCharacterName(inlineRole[1].split(/[,，、/]/)[0]);
+            if (isLikelyPersonName(firstRole)) return firstRole;
         }
     }
 
-    // 2. Check leading bracket/title markers like 【角色名】 or [角色名] if it matches a known character in worldbook
-    const headLine = text.split(/\r?\n/)[0].trim();
-    const bracketMatch = headLine.match(/^[【\[]([^】\]]{2,10})[】\]]/);
-    if (bracketMatch) {
-        const candidate = bracketMatch[1].trim();
-        if (knownCharNames.has(candidate)) return candidate;
+    // 2. Check leading lines (first 5 non-empty lines) for explicit character title / route / POV tags:
+    //    e.g. 【林晚】、【角色：林晚】、[苏晴线]、# 林晚篇、（视角：沈清）、Character: Alice
+    const firstLines = text
+        .replace(/<(?:SceneInfo|think|thinking|cot|style|script)[\s\S]*?<\/(?:SceneInfo|think|thinking|cot|style|script)>/gi, '')
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(Boolean)
+        .slice(0, 5);
+
+    for (const line of firstLines) {
+        // Explicit labeled header: 【角色：XXX】 / [人物：XXX] / 角色线：XXX
+        const labeledMatch = line.match(/^(?:[【\[（(]|#{1,4}\s*)?(?:当前)?(?:角色|人物|女主|男主|视角|攻略对象|路线|篇章|开局)\s*[:：·\-]\s*([^】\]）)\r\n|]{2,12})/);
+        if (labeledMatch) {
+            const cand = normalizeCandidateCharacterName(labeledMatch[1]);
+            if (isLikelyPersonName(cand) && cand !== cardTitle) return cand;
+        }
+
+        // Bracketed or markdown heading at line 0/1: 【林晚】 / 【林晚 · 初遇】 / [林晚线] / ### 林晚
+        const bracketMatch = line.match(/^(?:[【\[《「]|#{1,4}\s*)([^】\]》」\r\n]{2,16})(?:[】\]》」]|$)/);
+        if (bracketMatch) {
+            const rawInner = bracketMatch[1].split(/[·•|\-—:：/]/)[0].trim();
+            const cand = normalizeCandidateCharacterName(rawInner);
+            if (cand && cand !== cardTitle) {
+                if (knownCharNames.has(cand)) return cand;
+                if (isLikelyPersonName(cand) && /(?:线|篇|开局|日常|初遇|视角)$/.test(bracketMatch[1].trim())) {
+                    return cand;
+                }
+            }
+        }
+    }
+
+    // 3. Frequency + earliest-appearance scan of known roster characters in the greeting body
+    if (knownCharNames.size >= 2) {
+        const bodyText = text.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, '');
+        let bestName: string | null = null;
+        let bestScore = 0;
+        let bestFirstIdx = Infinity;
+
+        for (const candidate of knownCharNames) {
+            if (!candidate || candidate === cardTitle || candidate.length < 2) continue;
+            let count = 0;
+            let firstIdx = -1;
+            let searchPos = 0;
+            while (searchPos < bodyText.length) {
+                const idx = bodyText.indexOf(candidate, searchPos);
+                if (idx === -1) break;
+                if (firstIdx === -1) firstIdx = idx;
+                count += 1;
+                searchPos = idx + candidate.length;
+            }
+            if (count > 0) {
+                // Weight early appearance (in first 300 chars) + occurrence count
+                const earlyBonus = firstIdx < 300 ? 2 : 0;
+                const score = count + earlyBonus;
+                if (score > bestScore || (score === bestScore && firstIdx < bestFirstIdx)) {
+                    bestScore = score;
+                    bestFirstIdx = firstIdx;
+                    bestName = candidate;
+                }
+            }
+        }
+        if (bestName) return bestName;
     }
 
     return null;
@@ -441,29 +599,42 @@ export function convertTavernCardToCharacter(
     const baseSystemPrompt = promptSections.join('\n\n');
     const baseWorldview = typeof d.scenario === 'string' ? d.scenario.trim() : '';
 
-    // Check if this card is a multi-character ensemble card (like 县城)
-    const knownWbCharNames = new Set<string>();
-    for (const wb of worldbooks) {
-        const t = (wb.title || '').trim();
-        if (t && !t.endsWith('nsfw') && !t.includes('内心状态') && !t.includes('约束') && !t.includes('插图')) {
-            knownWbCharNames.add(t);
-        }
+    // Universal multi-character ensemble card detection:
+    // 1) Extract roster from worldbooks (summary tables + individual character entries), description, and regex scripts
+    const { knownNames: knownWbCharNames, summaryMap, loreMap } = extractCharacterRosterFromCard(
+        worldbooks,
+        typeof d.description === 'string' ? d.description : '',
+        name,
+    );
+    const avatarMap = extractCharacterAvatarsFromCard(
+        regexRules,
+        worldbooks,
+        typeof d.description === 'string' ? d.description : '',
+    );
+    for (const k of avatarMap.keys()) {
+        if (isLikelyPersonName(k) && k !== name) knownWbCharNames.add(k);
     }
-    const summaryMap = extractCharacterSummariesFromWorldbooks(worldbooks);
-    for (const k of summaryMap.keys()) knownWbCharNames.add(k);
-    const avatarMap = extractCharacterAvatarsFromRegexRules(regexRules);
-    for (const k of avatarMap.keys()) knownWbCharNames.add(k);
 
+    // 2) Match greetings to characters via <SceneInfo>, leading tags (【角色】/[角色线]), or body mention frequency
     const greetingGroups = new Map<string, string[]>();
     const unassignedGreetings: string[] = [];
     for (const g of greetings) {
-        const detectedName = detectGreetingCharacterName(g, knownWbCharNames);
+        const detectedName = detectGreetingCharacterName(g, knownWbCharNames, name);
         if (detectedName && detectedName !== name) {
             const list = greetingGroups.get(detectedName) || [];
             list.push(g);
             greetingGroups.set(detectedName, list);
         } else {
             unassignedGreetings.push(g);
+        }
+    }
+
+    // 3) If the card has no per-character greetings (e.g. only 1 shared opening) but its worldbooks clearly define >= 3 distinct character lore entries,
+    //    also populate greetingGroups so every character in the ensemble card appears in Neural Link!
+    if (greetingGroups.size < 2 && loreMap.size >= 3) {
+        for (const charKey of loreMap.keys()) {
+            const charSpecificGreetings = greetings.filter(g => g.includes(charKey));
+            greetingGroups.set(charKey, charSpecificGreetings.length > 0 ? charSpecificGreetings : greetings);
         }
     }
 

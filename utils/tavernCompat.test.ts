@@ -293,6 +293,56 @@ describe('4. 桌面真实图片与群像角色卡 (1_11.png + 3张转码立绘�
         expect(transformedGreeting).toContain('scene-info-panel');
     });
 
+
+    it('通用多角色群像卡识别：不依赖 <SceneInfo>，支持普通【角色线】开场白、正文人名高频匹配、以及纯世界书多角色提取', () => {
+        const genericMultiCard = {
+            spec: 'chara_card_v2',
+            data: {
+                name: '星海学园',
+                description: '一所位于人工岛上的超能力学院。',
+                first_mes: '【苏晴 · 天台偶遇】\n午休时间的天台上，苏晴正靠在栏杆边翻阅一本旧乐谱。听到脚步声，苏晴转过头看向你。',
+                alternate_greetings: [
+                    '【苏晴 · 琴房夜练】\n傍晚的琴房里只剩下苏晴一个人弹奏钢琴。',
+                    '图书馆的角落里，沈清瑶推了推眼镜，把一叠整理好的古籍递到你面前。「这是你上次找的资料。」沈清瑶轻声说道。',
+                    '[角色：夏凛]\n训练场上，夏凛擦去额头的汗水，朝你勾了勾手指。',
+                ],
+                character_book: {
+                    name: '星海学园设定集',
+                    entries: [
+                        {
+                            uid: 1,
+                            comment: '苏晴',
+                            keys: ['苏晴'],
+                            content: '身份：音乐科二年级生，温柔安静的钢琴少女。\n外貌：长发及腰，白皙清秀。\n![苏晴](https://example.com/suqing.png)',
+                        },
+                        {
+                            uid: 2,
+                            comment: '沈清瑶',
+                            keys: ['沈清瑶'],
+                            content: '身份：图书委员长，性格清冷严谨。\n外貌：黑长直，银框眼镜。',
+                        },
+                        {
+                            uid: 3,
+                            comment: '夏凛',
+                            keys: ['夏凛'],
+                            content: '身份：剑道部主将，直率爽朗。',
+                        },
+                    ],
+                },
+            },
+        };
+
+        const res = convertTavernCardToCharacter(genericMultiCard, { now: 5000 });
+        expect(res.suggestedGroupName).toBe('星海学园');
+        const names = res.characters.map(c => c.character.name);
+        expect(names).toEqual(['苏晴', '沈清瑶', '夏凛', '星海学园（全员沙盒）']);
+
+        const suqing = res.characters.find(c => c.character.name === '苏晴')!;
+        expect(suqing.greetings).toHaveLength(2);
+        expect(suqing.character.avatar).toBe('https://example.com/suqing.png');
+        expect(suqing.character.description).toContain('音乐科二年级生');
+    });
+
     it('兼容桌面 3 张被重命名为 .png 的 JPEG 立绘图片，自动识别真实 MIME 并生成可用角色卡而不报错', async () => {
         const paths = [
             '/Users/mengjingnan/Desktop/232624895728480__00001_.png',

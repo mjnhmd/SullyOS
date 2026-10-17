@@ -3211,13 +3211,29 @@ const MessageItem = React.memo(({
                     return <TavernHtmlFrame key={index} html={codeContent} />;
                 }
                 return (
-                    <pre key={index} className="bg-black/80 text-gray-100 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2 whitespace-pre shadow-inner border border-white/10">
+                    <pre key={index} className="bg-black/80 text-gray-100 p-3 rounded-lg text-xs font-mono max-w-full overflow-x-auto my-2 whitespace-pre-wrap break-all shadow-inner border border-white/10">
                         {codeContent}
                     </pre>
                 );
             }
             if (isTavernRichHtmlBlock(part)) {
                 return <TavernHtmlFrame key={index} html={part} />;
+            }
+
+            // If a non-fenced part contains an embedded <body>...</body> or <!DOCTYPE html>...</html> block, split and render it via TavernHtmlFrame
+            const embeddedHtmlRe = /((?:<!DOCTYPE\s+html[\s\S]*?<\/html>)|(?:<html\b[^>]*>[\s\S]*?<\/html>)|(?:<body\b[^>]*>[\s\S]*?<\/body>))/gi;
+            if (embeddedHtmlRe.test(part)) {
+                embeddedHtmlRe.lastIndex = 0;
+                const subParts = part.split(embeddedHtmlRe);
+                return subParts.map((sub, sIdx) => {
+                    if (!sub || !sub.trim()) return null;
+                    if (isTavernRichHtmlBlock(sub)) {
+                        return <TavernHtmlFrame key={`${index}-html-${sIdx}`} html={sub} />;
+                    }
+                    return sub.split('\n').map((line, lIdx) => (
+                        <div key={`${index}-${sIdx}-${lIdx}`} className="min-h-[1.2em]">{renderInline(line)}</div>
+                    ));
+                });
             }
 
             // Clean stray backtick artifacts from non-code text
@@ -3375,10 +3391,11 @@ const MessageItem = React.memo(({
     // 顶部不再重复渲染正文，也不再显示（此时已无意义的）译/原文切换按钮。
     const isForeignVoiceMsg = !isUser && m.type === 'text' && !!voiceData?.url && !!voiceData?.lang && !!cleanVoiceText(voiceData?.spokenText);
 
+    const hasRichTavernHtml = /<!DOCTYPE\s+html|<(?:html|body|script|style)\b/i.test(displayContent);
     return commonLayout(
         <div className={isVoiceOnlyMsg
             ? `relative ${suppressEntranceAnimation ? '' : 'animate-fade-in'}`
-            : `relative ${bubbleVariant === 'flat' || bubbleVariant === 'outline' || bubbleVariant === 'wechat' ? '' : 'shadow-sm '}px-5 py-3 ${suppressEntranceAnimation ? '' : 'animate-fade-in'} ${bubbleVariant === 'outline' ? '' : 'border border-black/5 '}active:scale-[0.98] transition-transform overflow-visible ${isUser ? 'sully-bubble-user' : 'sully-bubble-ai'} ${bubbleGroupClasses}`}
+            : `relative max-w-full ${hasRichTavernHtml ? 'w-[min(82vw,420px)]' : ''} ${bubbleVariant === 'flat' || bubbleVariant === 'outline' || bubbleVariant === 'wechat' ? '' : 'shadow-sm '}px-5 py-3 ${suppressEntranceAnimation ? '' : 'animate-fade-in'} ${bubbleVariant === 'outline' ? '' : 'border border-black/5 '}active:scale-[0.98] transition-transform overflow-visible ${isUser ? 'sully-bubble-user' : 'sully-bubble-ai'} ${bubbleGroupClasses}`}
             style={isVoiceOnlyMsg ? undefined : containerStyle}>
 
             {/* Layer 1: Background Image with Independent Opacity */}
@@ -3436,43 +3453,43 @@ const MessageItem = React.memo(({
                 </div>
             )}
 
-            {/* 酒馆多开场白切换器（首条开场白支持左右切换） */}
+            {/* 酒馆多开场白切换器（紧凑居中胶囊，避免被宽内容挤出屏幕右侧） */}
             {greetingSwitcher && greetingSwitcher.total > 1 && (
                 <div
-                    className="relative z-10 mt-2.5 pt-2 flex items-center justify-between gap-2 select-none"
+                    className="relative z-10 mt-2.5 pt-2 flex items-center justify-between gap-2 w-full max-w-full select-none"
                     style={{ borderTop: '1px solid rgba(127, 127, 127, 0.16)' }}
                     onClick={e => e.stopPropagation()}
                     onPointerDown={e => e.stopPropagation()}
                 >
-                    <span className="text-[10px] font-medium opacity-55" style={{ color: styleConfig.textColor }}>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            const prevIdx = (greetingSwitcher.currentIndex - 1 + greetingSwitcher.total) % greetingSwitcher.total;
+                            greetingSwitcher.onSwitch(prevIdx);
+                        }}
+                        className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium bg-black/[0.06] hover:bg-black/10 active:scale-95 transition-all flex items-center gap-1"
+                        style={{ color: styleConfig.textColor }}
+                    >
+                        <span>‹</span>
+                        <span>上一开局</span>
+                    </button>
+                    <span className="text-[11px] font-semibold tabular-nums opacity-65 shrink-0" style={{ color: styleConfig.textColor }}>
                         开场白 {greetingSwitcher.currentIndex + 1} / {greetingSwitcher.total}
                     </span>
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                const prevIdx = (greetingSwitcher.currentIndex - 1 + greetingSwitcher.total) % greetingSwitcher.total;
-                                greetingSwitcher.onSwitch(prevIdx);
-                            }}
-                            className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-black/5 hover:bg-black/10 active:scale-95 transition-all"
-                            style={{ color: styleConfig.textColor }}
-                        >
-                            ‹ 上一开局
-                        </button>
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                const nextIdx = (greetingSwitcher.currentIndex + 1) % greetingSwitcher.total;
-                                greetingSwitcher.onSwitch(nextIdx);
-                            }}
-                            className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-black/5 hover:bg-black/10 active:scale-95 transition-all"
-                            style={{ color: styleConfig.textColor }}
-                        >
-                            下一开局 ›
-                        </button>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            const nextIdx = (greetingSwitcher.currentIndex + 1) % greetingSwitcher.total;
+                            greetingSwitcher.onSwitch(nextIdx);
+                        }}
+                        className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium bg-black/[0.06] hover:bg-black/10 active:scale-95 transition-all flex items-center gap-1"
+                        style={{ color: styleConfig.textColor }}
+                    >
+                        <span>下一开局</span>
+                        <span>›</span>
+                    </button>
                 </div>
             )}
 

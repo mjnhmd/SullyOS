@@ -1,4 +1,5 @@
 import type { Category, FaceLandmarker, FaceLandmarkerResult } from '@mediapipe/tasks-vision';
+import { resolveNosCdnUrl } from './nosAssetResolver';
 
 export type UserCameraEmotion = 'neutral' | 'happy' | 'surprised' | 'sad' | 'angry' | 'disgusted' | 'tired';
 
@@ -117,8 +118,11 @@ export const classifyUserCameraBlendshapes = (shapes: ReadonlyMap<string, number
 };
 
 const resolvePublicAsset = (path: string): string => {
+  const clean = path.replace(/^\//, '');
+  const cdnUrl = resolveNosCdnUrl(`/${clean}`);
+  if (cdnUrl) return cdnUrl;
   const base = String(import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
-  return `${base}${path.replace(/^\//, '')}`;
+  return `${base}${clean}`;
 };
 
 let landmarkerPromise: Promise<FaceLandmarker> | null = null;
@@ -128,7 +132,11 @@ let detectorGeneration = 0;
 
 const createLandmarker = async (): Promise<FaceLandmarker> => {
   const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
-  const fileset = await FilesetResolver.forVisionTasks(resolvePublicAsset('mediapipe/wasm'));
+  const wasmJsCdn = resolveNosCdnUrl('/mediapipe/wasm/vision_wasm_internal.js');
+  const wasmBinCdn = resolveNosCdnUrl('/mediapipe/wasm/vision_wasm_internal.wasm');
+  const fileset = (wasmJsCdn && wasmBinCdn)
+    ? { wasmLoaderPath: wasmJsCdn, wasmBinaryPath: wasmBinCdn }
+    : await FilesetResolver.forVisionTasks(resolvePublicAsset('mediapipe/wasm'));
   const sharedOptions = {
     baseOptions: { modelAssetPath: resolvePublicAsset('mediapipe/models/face_landmarker.task') },
     runningMode: 'VIDEO' as const,

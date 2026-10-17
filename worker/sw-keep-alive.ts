@@ -2,6 +2,7 @@
 
 import { installReiSW } from '@rei-standard/amsg-sw';
 import { createStaticCache, type StaticManifest } from './staticCache';
+import { resolveNosCdnUrl } from '../utils/nosAssetResolver';
 
 declare const __STATIC_CACHE_MANIFEST__: StaticManifest | undefined;
 const staticManifest = typeof __STATIC_CACHE_MANIFEST__ === 'undefined' ? undefined : __STATIC_CACHE_MANIFEST__;
@@ -117,13 +118,40 @@ const resourceCache = staticManifest && createStaticCache({
   fetch: request => fetch(request), waitUntil: () => {},
   digest: async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join(''),
 });
-if (resourceCache) {
-  sw.addEventListener('fetch', event => {
+sw.addEventListener('fetch', event => {
+  if (event.request.method === 'GET') {
+    try {
+      const reqUrl = new URL(event.request.url);
+      const scopeUrl = new URL(sw.registration.scope);
+      if (reqUrl.origin === scopeUrl.origin && reqUrl.pathname.startsWith(scopeUrl.pathname)) {
+        const relPath = '/' + reqUrl.pathname.slice(scopeUrl.pathname.length).replace(/^\/+/, '');
+        const nosUrl = resolveNosCdnUrl(relPath);
+        if (nosUrl) {
+          event.respondWith((async () => {
+            const cache = await sw.caches.open('sully-nos-assets-v1');
+            const cached = await cache.match(nosUrl);
+            if (cached) return cached;
+            const localResp = await fetch(event.request).catch(() => undefined);
+            if (localResp && localResp.ok && !/^text\/html\b/i.test(localResp.headers.get('Content-Type') || '')) {
+              return localResp;
+            }
+            const cdnResp = await fetch(nosUrl, { mode: 'cors', credentials: 'omit' });
+            if (cdnResp.ok) {
+              event.waitUntil(cache.put(nosUrl, cdnResp.clone()).catch(() => {}));
+            }
+            return cdnResp;
+          })());
+          return;
+        }
+      }
+    } catch { /* fall through */ }
+  }
+  if (resourceCache) {
     const result = resourceCache.handle(event.request, promise => event.waitUntil(promise));
     // A failed download reaches the page as the network error it is, without an unhandled rejection per request.
     if (result) event.respondWith(result.catch(() => Response.error()));
-  });
-}
+  }
+});
 
 /** Clears shells of releases no open page still runs. Pages that do not answer postpone it. */
 async function tidyResourceCache(cache: NonNullable<typeof resourceCache>): Promise<void> {
@@ -863,5 +891,17 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
 sw.addEventListener('activate', (event: ExtendableEvent) => {
   // Requests of the page that is about to load are held until this finishes, so it only takes
   // control. Older shells are cleared later, when a started page asks (SULLY_CACHE_TIDY).
-  event.waitUntil(sw.clients.claim());
+  // In Capacitor native builds (!resourceCache), purge any legacy sully-static-* shells left over from old APKs
+  // so the WebView always loads the freshly installed APK bundle instead of a stale cached index.html.
+  event.waitUntil((async () => {
+    if (!resourceCache && sw.caches) {
+      try {
+        const names = await sw.caches.keys();
+        await Promise.all(
+          names.filter(n => n.startsWith('sully-static-')).map(n => sw.caches.delete(n)),
+        );
+      } catch { /* ignore */ }
+    }
+    await sw.clients.claim();
+  })());
 });

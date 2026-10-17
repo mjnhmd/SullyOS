@@ -3,6 +3,7 @@ import type { CharacterProfile } from '../types';
 import { DB } from './db';
 import { live2DRuntimeCacheAssetId, type Live2DTextureQuality } from './avatarModelStore';
 import { isBuiltinSullyLive2D } from './builtinSullyLive2D';
+import { resolveNosCdnUrl } from './nosAssetResolver';
 
 export type Live2DAvatarConfig = Extract<NonNullable<CharacterProfile['videoAvatar']>, { format: 'live2d' }>;
 export type Live2DAction = Live2DAvatarConfig['actions'][number];
@@ -1220,7 +1221,8 @@ const getBuiltinLive2DSettings = async (
 ): Promise<BuiltinLive2DSettingsResult> => {
   if (!isBuiltinSullyLive2D(config)) throw new Error('内置 Live2D 配置缺少静态模型地址。');
   const startedAt = nowMs();
-  const modelUrl = new URL(config.builtinModelUrl, builtinDocumentBase()).href;
+  const effectiveBuiltinPath = config.builtinModelUrl.replace('sully/live2d-4k/', 'sully/live2d-2k/');
+  const modelUrl = new URL(effectiveBuiltinPath, builtinDocumentBase()).href;
   const cached = builtinLive2DSettingsCache.get(modelUrl);
   if (cached) {
     onProgress?.('正在从内置缓存恢复 Sully…');
@@ -1258,9 +1260,11 @@ const hydrateBuiltinSettings = (
   if (!refs?.Moc || !Array.isArray(refs.Textures) || !refs.Textures.length) {
     throw new Error('Sully 内置 model3.json 缺少 Moc 或 Textures。');
   }
-  const absolute = (reference?: string): string | undefined => (
-    reference ? new URL(reference, modelUrl).href : undefined
-  );
+  const absolute = (reference?: string): string | undefined => {
+    if (!reference) return undefined;
+    const localHref = new URL(reference, modelUrl).href;
+    return resolveNosCdnUrl(localHref) || localHref;
+  };
   refs.Moc = absolute(refs.Moc);
   refs.Textures = refs.Textures.map((reference: string) => absolute(reference));
   refs.Physics = absolute(refs.Physics);

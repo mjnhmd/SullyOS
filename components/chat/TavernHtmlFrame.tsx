@@ -14,9 +14,8 @@ export function isTavernRichHtmlBlock(code: string): boolean {
     const trimmed = String(code || '').trim();
     if (!trimmed) return false;
     if (/^(?:<!--[\s\S]*?-->\s*)*<!DOCTYPE\s+html/i.test(trimmed)) return true;
-    if (/^(?:<!--[\s\S]*?-->\s*)*<html[\s>]/i.test(trimmed)) return true;
-    if (/^(?:<!--[\s\S]*?-->\s*)*<head[\s>]/i.test(trimmed) && /<\/(?:body|script|style)>/i.test(trimmed)) return true;
-    if (/^<(?:div|span|style|section)\b/i.test(trimmed) && /<(?:style|script)\b/i.test(trimmed)) return true;
+    if (/^(?:<!--[\s\S]*?-->\s*)*<(?:html|head|body)[\s>]/i.test(trimmed)) return true;
+    if (/^(?:<!--[\s\S]*?-->\s*)*<(?:div|span|style|script|section|main|article|iframe)\b/i.test(trimmed) && /<(?:style|script|body|iframe)\b/i.test(trimmed)) return true;
     return false;
 }
 
@@ -38,6 +37,43 @@ function buildSandboxedDocument(rawHtml: string, frameId: string): string {
     };
     try { Object.defineProperty(window, "localStorage", { value: fakeStorage, configurable: true }); } catch (err) {}
     try { Object.defineProperty(window, "sessionStorage", { value: fakeStorage, configurable: true }); } catch (err) {}
+  }
+  if (typeof window.$ === "undefined" && typeof window.jQuery === "undefined") {
+    var miniJq = function(sel) {
+      var els = typeof sel === "string" ? Array.prototype.slice.call(document.querySelectorAll(sel)) : (sel ? [sel] : []);
+      return {
+        load: function(url, cb) {
+          fetch(url).then(function(r){ return r.text(); }).then(function(html){
+            els.forEach(function(el){
+              el.innerHTML = html;
+              var scripts = Array.prototype.slice.call(el.querySelectorAll("script"));
+              scripts.forEach(function(oldScript){
+                var newScript = document.createElement("script");
+                Array.prototype.slice.call(oldScript.attributes).forEach(function(attr){
+                  newScript.setAttribute(attr.name, attr.value);
+                });
+                newScript.textContent = oldScript.textContent;
+                oldScript.parentNode.replaceChild(newScript, oldScript);
+              });
+            });
+            if (typeof cb === "function") cb(html, "success");
+            setTimeout(reportHeight, 100);
+            setTimeout(reportHeight, 500);
+          }).catch(function(err){ console.warn("[TavernHtmlFrame] $.load failed:", err); });
+          return this;
+        },
+        html: function(v) {
+          if (v === undefined) return els[0] ? els[0].innerHTML : "";
+          els.forEach(function(el){ el.innerHTML = v; });
+          return this;
+        },
+        on: function(ev, fn) {
+          els.forEach(function(el){ el.addEventListener(ev, fn); });
+          return this;
+        }
+      };
+    };
+    window.$ = window.jQuery = miniJq;
   }
   window.triggerSlash = window.triggerSlash || function(cmd) {
     var text = String(cmd || "").replace(/^\/(?:send|echo)\s+/i, "").trim();

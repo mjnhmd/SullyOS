@@ -1594,6 +1594,7 @@ function isPublicExternalAsset(url) {
   }
   if (url.hostname === "raw.githubusercontent.com") return url.pathname.startsWith("/qegj567-cloud/SullyOS-assets/");
   if (url.hostname === "cdn.statically.io") return url.pathname.startsWith("/gh/qegj567-cloud/SullyOS-assets/");
+  if (url.hostname === "ydschool-video.nosdn.127.net" || url.hostname === "nos.netease.com") return true;
   return url.hostname === "unpkg.com" && url.pathname.startsWith("/katex@0.16.9/dist/");
 }
 function createStaticCache(deps) {
@@ -1942,6 +1943,328 @@ function createStaticCache(deps) {
   return { install, activate, handle, stats, clearRuntime, markReplaced: markShellStale };
 }
 
+// utils/nosAssetManifest.json
+var nosAssetManifest_default = {
+  assets: {
+    "/assets/build/noto-sans-sc-chinese-simplified-400-normal.e25467c8-Ba7eOkfT.woff2": "https://ydschool-video.nosdn.127.net/1792197104218noto-sans-sc-chinese-simplified-400-normal.e25467c8-Ba7eOkfT.woff2",
+    "/assets/build/noto-sans-sc-chinese-simplified-500-normal.d3553b6f-z_irmif2.woff2": "https://ydschool-video.nosdn.127.net/1792197101581noto-sans-sc-chinese-simplified-500-normal.d3553b6f-z_irmif2.woff2",
+    "/assets/build/noto-sans-sc-chinese-simplified-700-normal.6e0a7691-DoUziBww.woff2": "https://ydschool-video.nosdn.127.net/1792197103138noto-sans-sc-chinese-simplified-700-normal.6e0a7691-DoUziBww.woff2",
+    "/assets/build/pdf.worker.min-DKQKFyKK.js": "https://ydschool-video.nosdn.127.net/1792197102409pdf.worker.min-DKQKFyKK.js",
+    "/assets/build/reference-D0R8VoIv.fbx": "https://ydschool-video.nosdn.127.net/1792197103653reference-D0R8VoIv.fbx",
+    "/assets/build/sar-club-room-Dys62SAH.png": "https://ydschool-video.nosdn.127.net/1792197100595sar-club-room-Dys62SAH.png",
+    "/boot/mid-autumn-2026.png": "https://ydschool-video.nosdn.127.net/1792197014190mid-autumn-2026.png",
+    "/changelogs/2026-4.html": "https://ydschool-video.nosdn.127.net/17921970142352026-4.html",
+    "/dino-models/aiven-chimera.glb": "https://ydschool-video.nosdn.127.net/1792197013645aiven-chimera.glb",
+    "/dino-models/ankylosaurus.glb": "https://ydschool-video.nosdn.127.net/1792197014851ankylosaurus.glb",
+    "/dino-models/brachiosaurus.glb": "https://ydschool-video.nosdn.127.net/1792197014354brachiosaurus.glb",
+    "/dino-models/dinosaur-egg.glb": "https://ydschool-video.nosdn.127.net/1792197013593dinosaur-egg.glb",
+    "/dino-models/dinosaur-fossil.glb": "https://ydschool-video.nosdn.127.net/1792197013695dinosaur-fossil.glb",
+    "/dino-models/parasaurolophus.glb": "https://ydschool-video.nosdn.127.net/1792197014188parasaurolophus.glb",
+    "/dino-models/plesiosaur.glb": "https://ydschool-video.nosdn.127.net/1792197013629plesiosaur.glb",
+    "/dino-models/pteranodon.glb": "https://ydschool-video.nosdn.127.net/1792197013894pteranodon.glb",
+    "/dino-models/spinosaurus.glb": "https://ydschool-video.nosdn.127.net/1792197014068spinosaurus.glb",
+    "/dino-models/stegosaurus.glb": "https://ydschool-video.nosdn.127.net/1792197015038stegosaurus.glb",
+    "/dino-models/triceratops.glb": "https://ydschool-video.nosdn.127.net/1792197014414triceratops.glb",
+    "/dino-models/tyrannosaurus.glb": "https://ydschool-video.nosdn.127.net/1792197014472tyrannosaurus.glb",
+    "/dino-models/velociraptor.glb": "https://ydschool-video.nosdn.127.net/1792197014162velociraptor.glb",
+    "/mediapipe/models/face_landmarker.task": "https://ydschool-video.nosdn.127.net/1792197012392face_landmarker.task",
+    "/mediapipe/wasm/vision_wasm_internal.js": "https://ydschool-video.nosdn.127.net/1792197012072vision_wasm_internal.js",
+    "/mediapipe/wasm/vision_wasm_internal.wasm": "https://ydschool-video.nosdn.127.net/1792197012428vision_wasm_internal.wasm",
+    "/room-templates/blue-minimal/assets/item-01.png": "https://ydschool-video.nosdn.127.net/1792197013361item-01.png",
+    "/room-templates/blue-minimal/assets/item-03.png": "https://ydschool-video.nosdn.127.net/1792197013019item-03.png",
+    "/room-templates/blue-minimal/assets/item-05.png": "https://ydschool-video.nosdn.127.net/1792197012978item-05.png",
+    "/room-templates/blue-minimal/preview.png": "https://ydschool-video.nosdn.127.net/1792197012943preview.png",
+    "/room-templates/forest-cottage/assets/floor.png": "https://ydschool-video.nosdn.127.net/1792197013646floor.png",
+    "/room-templates/forest-cottage/assets/item-01.png": "https://ydschool-video.nosdn.127.net/1792197013851item-01.png",
+    "/room-templates/forest-cottage/assets/item-02.png": "https://ydschool-video.nosdn.127.net/1792197013448item-02.png",
+    "/room-templates/forest-cottage/assets/item-03.png": "https://ydschool-video.nosdn.127.net/1792197013368item-03.png",
+    "/room-templates/forest-cottage/assets/item-05.png": "https://ydschool-video.nosdn.127.net/1792197013263item-05.png",
+    "/room-templates/forest-cottage/preview.png": "https://ydschool-video.nosdn.127.net/1792197013451preview.png",
+    "/room3d/animations/happy-wave-source.glb": "https://ydschool-video.nosdn.127.net/1792197012015happy-wave-source.glb",
+    "/room3d/animations/happy-wave.json": "https://ydschool-video.nosdn.127.net/1792197011987happy-wave.json",
+    "/room3d/bath_cart.glb": "https://ydschool-video.nosdn.127.net/1792197006845bath_cart.glb",
+    "/room3d/bath_hamper.glb": "https://ydschool-video.nosdn.127.net/1792197006345bath_hamper.glb",
+    "/room3d/bath_linen_cabinet.glb": "https://ydschool-video.nosdn.127.net/1792197006751bath_linen_cabinet.glb",
+    "/room3d/bath_shower.glb": "https://ydschool-video.nosdn.127.net/1792197007635bath_shower.glb",
+    "/room3d/bath_stool.glb": "https://ydschool-video.nosdn.127.net/1792197007406bath_stool.glb",
+    "/room3d/bath_toilet.glb": "https://ydschool-video.nosdn.127.net/1792197006686bath_toilet.glb",
+    "/room3d/bath_towel_rack.glb": "https://ydschool-video.nosdn.127.net/1792197008254bath_towel_rack.glb",
+    "/room3d/bath_tub.glb": "https://ydschool-video.nosdn.127.net/1792197006369bath_tub.glb",
+    "/room3d/bath_vanity.glb": "https://ydschool-video.nosdn.127.net/1792197008062bath_vanity.glb",
+    "/room3d/bath_washer.glb": "https://ydschool-video.nosdn.127.net/1792197006689bath_washer.glb",
+    "/room3d/bathroom_ref_towel_shelf.glb": "https://ydschool-video.nosdn.127.net/1792197008120bathroom_ref_towel_shelf.glb",
+    "/room3d/bedroom_bench.glb": "https://ydschool-video.nosdn.127.net/1792197007101bedroom_bench.glb",
+    "/room3d/bedroom_bunk.glb": "https://ydschool-video.nosdn.127.net/1792197008216bedroom_bunk.glb",
+    "/room3d/bedroom_double_bed.glb": "https://ydschool-video.nosdn.127.net/1792197007796bedroom_double_bed.glb",
+    "/room3d/bedroom_dresser.glb": "https://ydschool-video.nosdn.127.net/1792197006304bedroom_dresser.glb",
+    "/room3d/bedroom_loft.glb": "https://ydschool-video.nosdn.127.net/1792197007849bedroom_loft.glb",
+    "/room3d/bedroom_nightstand.glb": "https://ydschool-video.nosdn.127.net/1792197007795bedroom_nightstand.glb",
+    "/room3d/bedroom_ref_dresser_top.glb": "https://ydschool-video.nosdn.127.net/1792197007853bedroom_ref_dresser_top.glb",
+    "/room3d/bedroom_ref_rug.glb": "https://ydschool-video.nosdn.127.net/1792197007636bedroom_ref_rug.glb",
+    "/room3d/bedroom_ref_sideboard_top.glb": "https://ydschool-video.nosdn.127.net/1792197006374bedroom_ref_sideboard_top.glb",
+    "/room3d/bedroom_ref_sill_garden.glb": "https://ydschool-video.nosdn.127.net/1792197006326bedroom_ref_sill_garden.glb",
+    "/room3d/bedroom_ref_wall_rack.glb": "https://ydschool-video.nosdn.127.net/1792197007319bedroom_ref_wall_rack.glb",
+    "/room3d/bedroom_ref_wardrobe.glb": "https://ydschool-video.nosdn.127.net/1792197006323bedroom_ref_wardrobe.glb",
+    "/room3d/bedroom_ref_window.glb": "https://ydschool-video.nosdn.127.net/1792197008344bedroom_ref_window.glb",
+    "/room3d/bedroom_single_bed.glb": "https://ydschool-video.nosdn.127.net/1792197008231bedroom_single_bed.glb",
+    "/room3d/bedroom_vanity.glb": "https://ydschool-video.nosdn.127.net/1792197007900bedroom_vanity.glb",
+    "/room3d/bedroom_wardrobe.glb": "https://ydschool-video.nosdn.127.net/1792197008427bedroom_wardrobe.glb",
+    "/room3d/catalog.json": "https://ydschool-video.nosdn.127.net/1792197008035catalog.json",
+    "/room3d/daisy_books.glb": "https://ydschool-video.nosdn.127.net/1792197007451daisy_books.glb",
+    "/room3d/daisy_cookies.glb": "https://ydschool-video.nosdn.127.net/1792197008425daisy_cookies.glb",
+    "/room3d/daisy_table.glb": "https://ydschool-video.nosdn.127.net/1792197006709daisy_table.glb",
+    "/room3d/daisy_vase.glb": "https://ydschool-video.nosdn.127.net/1792197006344daisy_vase.glb",
+    "/room3d/dining_vase.glb": "https://ydschool-video.nosdn.127.net/1792197007160dining_vase.glb",
+    "/room3d/gaming_chair.glb": "https://ydschool-video.nosdn.127.net/1792197007051gaming_chair.glb",
+    "/room3d/gaming_desk.glb": "https://ydschool-video.nosdn.127.net/1792197006691gaming_desk.glb",
+    "/room3d/gaming_display.glb": "https://ydschool-video.nosdn.127.net/1792197007446gaming_display.glb",
+    "/room3d/gaming_drawers.glb": "https://ydschool-video.nosdn.127.net/1792197006345gaming_drawers.glb",
+    "/room3d/gaming_keyboard.glb": "https://ydschool-video.nosdn.127.net/1792197006322gaming_keyboard.glb",
+    "/room3d/gaming_light.glb": "https://ydschool-video.nosdn.127.net/1792197007142gaming_light.glb",
+    "/room3d/gaming_maimai.glb": "https://ydschool-video.nosdn.127.net/1792197007835gaming_maimai.glb",
+    "/room3d/gaming_microphone.glb": "https://ydschool-video.nosdn.127.net/1792197006859gaming_microphone.glb",
+    "/room3d/gaming_monitors.glb": "https://ydschool-video.nosdn.127.net/1792197006381gaming_monitors.glb",
+    "/room3d/gaming_organizer.glb": "https://ydschool-video.nosdn.127.net/1792197008295gaming_organizer.glb",
+    "/room3d/gaming_pc.glb": "https://ydschool-video.nosdn.127.net/1792197008009gaming_pc.glb",
+    "/room3d/gaming_racing.glb": "https://ydschool-video.nosdn.127.net/1792197008454gaming_racing.glb",
+    "/room3d/kit.glb": "https://ydschool-video.nosdn.127.net/1792197007322kit.glb",
+    "/room3d/kitchen_appliance_shelf.glb": "https://ydschool-video.nosdn.127.net/1792197007501kitchen_appliance_shelf.glb",
+    "/room3d/kitchen_bin.glb": "https://ydschool-video.nosdn.127.net/1792197008407kitchen_bin.glb",
+    "/room3d/kitchen_cart.glb": "https://ydschool-video.nosdn.127.net/1792197008511kitchen_cart.glb",
+    "/room3d/kitchen_fridge.glb": "https://ydschool-video.nosdn.127.net/1792197007133kitchen_fridge.glb",
+    "/room3d/kitchen_island.glb": "https://ydschool-video.nosdn.127.net/1792197007486kitchen_island.glb",
+    "/room3d/kitchen_range.glb": "https://ydschool-video.nosdn.127.net/1792197007527kitchen_range.glb",
+    "/room3d/kitchen_ref_rack.glb": "https://ydschool-video.nosdn.127.net/1792197006842kitchen_ref_rack.glb",
+    "/room3d/kitchen_ref_shelves.glb": "https://ydschool-video.nosdn.127.net/1792197007592kitchen_ref_shelves.glb",
+    "/room3d/kitchen_ref_trolley.glb": "https://ydschool-video.nosdn.127.net/1792197008186kitchen_ref_trolley.glb",
+    "/room3d/kitchen_sink.glb": "https://ydschool-video.nosdn.127.net/1792197006704kitchen_sink.glb",
+    "/room3d/kitchen_spice_shelf.glb": "https://ydschool-video.nosdn.127.net/1792197006705kitchen_spice_shelf.glb",
+    "/room3d/little_console.glb": "https://ydschool-video.nosdn.127.net/1792197007284little_console.glb",
+    "/room3d/little_controller.glb": "https://ydschool-video.nosdn.127.net/1792197007033little_controller.glb",
+    "/room3d/living_ref_record_cabinet.glb": "https://ydschool-video.nosdn.127.net/1792197008149living_ref_record_cabinet.glb",
+    "/room3d/living_ref_sofa.glb": "https://ydschool-video.nosdn.127.net/1792197006723living_ref_sofa.glb",
+    "/room3d/living_ref_tea_tray.glb": "https://ydschool-video.nosdn.127.net/1792197008346living_ref_tea_tray.glb",
+    "/room3d/living_ref_tree.glb": "https://ydschool-video.nosdn.127.net/1792197006344living_ref_tree.glb",
+    "/room3d/living_ref_wall_shelf.glb": "https://ydschool-video.nosdn.127.net/1792197006326living_ref_wall_shelf.glb",
+    "/room3d/living_ref_window.glb": "https://ydschool-video.nosdn.127.net/1792197008425living_ref_window.glb",
+    "/room3d/monstera.glb": "https://ydschool-video.nosdn.127.net/1792197008368monstera.glb",
+    "/room3d/motions/Hanami-NOTICE.md": "https://ydschool-video.nosdn.127.net/1792197010334Hanami-NOTICE.md",
+    "/room3d/motions/photo/pose-mh-anrico_standing11.png": "https://ydschool-video.nosdn.127.net/1792197011663pose-mh-anrico_standing11.png",
+    "/room3d/motions/photo/pose-mh-callharvey3d_standingatease.png": "https://ydschool-video.nosdn.127.net/1792197011872pose-mh-callharvey3d_standingatease.png",
+    "/room3d/motions/photo/pose-mh-drednicolson_arms_akimbo.png": "https://ydschool-video.nosdn.127.net/1792197011856pose-mh-drednicolson_arms_akimbo.png",
+    "/room3d/motions/photo/pose-mh-gpedroso_peace_and_love.png": "https://ydschool-video.nosdn.127.net/1792197011501pose-mh-gpedroso_peace_and_love.png",
+    "/room3d/motions/photo/pose-mh-milkman_sit_01a.png": "https://ydschool-video.nosdn.127.net/1792197011895pose-mh-milkman_sit_01a.png",
+    "/room3d/motions/photo/pose-mh-punkduck_hand_on_shoulder_01.png": "https://ydschool-video.nosdn.127.net/1792197011700pose-mh-punkduck_hand_on_shoulder_01.png",
+    "/room3d/motions/photo/pose-mh-punkduck_pd_fashion02.png": "https://ydschool-video.nosdn.127.net/1792197011793pose-mh-punkduck_pd_fashion02.png",
+    "/room3d/motions/photo/pose-mh-sohh_posing4.png": "https://ydschool-video.nosdn.127.net/1792197011647pose-mh-sohh_posing4.png",
+    "/room3d/motions/photo/pose-mh-sohh_posing5.png": "https://ydschool-video.nosdn.127.net/1792197011764pose-mh-sohh_posing5.png",
+    "/room3d/motions/photo/pose-mh-sohh_posing6.png": "https://ydschool-video.nosdn.127.net/1792197011622pose-mh-sohh_posing6.png",
+    "/room3d/motions/photo/pose-mh-sohh_standing1.png": "https://ydschool-video.nosdn.127.net/1792197011585pose-mh-sohh_standing1.png",
+    "/room3d/motions/photo/pose-mh-sohh_standing2.png": "https://ydschool-video.nosdn.127.net/1792197011585pose-mh-sohh_standing2.png",
+    "/room3d/motions/photo/pose-mh-wolgade_sit_on_ground_01.png": "https://ydschool-video.nosdn.127.net/1792197011501pose-mh-wolgade_sit_on_ground_01.png",
+    "/room3d/motions/photo/pose-mh-xhado84_sitting_floor_3.png": "https://ydschool-video.nosdn.127.net/1792197011770pose-mh-xhado84_sitting_floor_3.png",
+    "/room3d/motions/selected/Hanami-NOTICE.md": "https://ydschool-video.nosdn.127.net/1792197011481Hanami-NOTICE.md",
+    "/room3d/motions/selected/cmu-13_17.json": "https://ydschool-video.nosdn.127.net/1792197011206cmu-13_17.json",
+    "/room3d/motions/selected/cmu-18_03.json": "https://ydschool-video.nosdn.127.net/1792197011302cmu-18_03.json",
+    "/room3d/motions/selected/cmu-18_05.json": "https://ydschool-video.nosdn.127.net/1792197011153cmu-18_05.json",
+    "/room3d/motions/selected/cmu-18_08.json": "https://ydschool-video.nosdn.127.net/1792197011338cmu-18_08.json",
+    "/room3d/motions/selected/cmu-18_10.json": "https://ydschool-video.nosdn.127.net/1792197011119cmu-18_10.json",
+    "/room3d/motions/selected/cmu-20_10.json": "https://ydschool-video.nosdn.127.net/1792197011471cmu-20_10.json",
+    "/room3d/motions/selected/cmu-20_11.json": "https://ydschool-video.nosdn.127.net/1792197011332cmu-20_11.json",
+    "/room3d/motions/selected/cmu-20_12.json": "https://ydschool-video.nosdn.127.net/1792197010650cmu-20_12.json",
+    "/room3d/motions/selected/cmu-20_13.json": "https://ydschool-video.nosdn.127.net/1792197010461cmu-20_13.json",
+    "/room3d/motions/selected/cmu-22_01.json": "https://ydschool-video.nosdn.127.net/1792197011556cmu-22_01.json",
+    "/room3d/motions/selected/cmu-22_03.json": "https://ydschool-video.nosdn.127.net/1792197010685cmu-22_03.json",
+    "/room3d/motions/selected/cmu-22_04.json": "https://ydschool-video.nosdn.127.net/1792197010873cmu-22_04.json",
+    "/room3d/motions/selected/cmu-22_05.json": "https://ydschool-video.nosdn.127.net/1792197010901cmu-22_05.json",
+    "/room3d/motions/selected/cmu-22_07.json": "https://ydschool-video.nosdn.127.net/1792197011203cmu-22_07.json",
+    "/room3d/motions/selected/cmu-22_08.json": "https://ydschool-video.nosdn.127.net/1792197010784cmu-22_08.json",
+    "/room3d/motions/selected/cmu-22_09.json": "https://ydschool-video.nosdn.127.net/1792197011123cmu-22_09.json",
+    "/room3d/motions/selected/cmu-22_13.json": "https://ydschool-video.nosdn.127.net/1792197011043cmu-22_13.json",
+    "/room3d/motions/selected/cmu-22_15.json": "https://ydschool-video.nosdn.127.net/1792197010739cmu-22_15.json",
+    "/room3d/motions/selected/cmu-22_17.json": "https://ydschool-video.nosdn.127.net/1792197011557cmu-22_17.json",
+    "/room3d/motions/selected/vrma-0c64f7e2cbde3af4.json": "https://ydschool-video.nosdn.127.net/1792197010716vrma-0c64f7e2cbde3af4.json",
+    "/room3d/motions/selected/vrma-1e8fb16b889c9054.json": "https://ydschool-video.nosdn.127.net/1792197010706vrma-1e8fb16b889c9054.json",
+    "/room3d/motions/selected/vrma-3b1c1155dfac93d4.json": "https://ydschool-video.nosdn.127.net/1792197010367vrma-3b1c1155dfac93d4.json",
+    "/room3d/motions/selected/vrma-40db0f7c6d612001.json": "https://ydschool-video.nosdn.127.net/1792197010572vrma-40db0f7c6d612001.json",
+    "/room3d/motions/selected/vrma-54a37ca48a1d4ffb.json": "https://ydschool-video.nosdn.127.net/1792197010827vrma-54a37ca48a1d4ffb.json",
+    "/room3d/motions/selected/vrma-55b69cf6ed4213ad.json": "https://ydschool-video.nosdn.127.net/1792197010704vrma-55b69cf6ed4213ad.json",
+    "/room3d/motions/selected/vrma-6a8dd04f6a0b4f07.json": "https://ydschool-video.nosdn.127.net/1792197010639vrma-6a8dd04f6a0b4f07.json",
+    "/room3d/motions/selected/vrma-788371d87156b583.json": "https://ydschool-video.nosdn.127.net/1792197011248vrma-788371d87156b583.json",
+    "/room3d/motions/selected/vrma-7bc4b0a91cd1feb0.json": "https://ydschool-video.nosdn.127.net/1792197010485vrma-7bc4b0a91cd1feb0.json",
+    "/room3d/motions/selected/vrma-7cac053d27467ce6.json": "https://ydschool-video.nosdn.127.net/1792197011118vrma-7cac053d27467ce6.json",
+    "/room3d/motions/selected/vrma-7d011478fbff385b.json": "https://ydschool-video.nosdn.127.net/1792197010456vrma-7d011478fbff385b.json",
+    "/room3d/motions/selected/vrma-8bd33d84e90c0243.json": "https://ydschool-video.nosdn.127.net/1792197010395vrma-8bd33d84e90c0243.json",
+    "/room3d/motions/selected/vrma-9563c582418bd5b5.json": "https://ydschool-video.nosdn.127.net/1792197011555vrma-9563c582418bd5b5.json",
+    "/room3d/motions/selected/vrma-a7dffdd79957bf87.json": "https://ydschool-video.nosdn.127.net/1792197010697vrma-a7dffdd79957bf87.json",
+    "/room3d/motions/selected/vrma-ad2a5118837bfa67.json": "https://ydschool-video.nosdn.127.net/1792197011127vrma-ad2a5118837bfa67.json",
+    "/room3d/motions/selected/vrma-bde19e90366f6448.json": "https://ydschool-video.nosdn.127.net/1792197011093vrma-bde19e90366f6448.json",
+    "/room3d/motions/selected/vrma-c5f715092eacacc8.json": "https://ydschool-video.nosdn.127.net/1792197010726vrma-c5f715092eacacc8.json",
+    "/room3d/motions/selected/vrma-cae36da2cc8b9845.json": "https://ydschool-video.nosdn.127.net/1792197011248vrma-cae36da2cc8b9845.json",
+    "/room3d/motions/selected/vrma-e3d9fa72f0bd27cc.json": "https://ydschool-video.nosdn.127.net/1792197010384vrma-e3d9fa72f0bd27cc.json",
+    "/room3d/motions/selected/vrma-fdcc1a71495a8b1b.json": "https://ydschool-video.nosdn.127.net/1792197011152vrma-fdcc1a71495a8b1b.json",
+    "/room3d/pet_bowls.glb": "https://ydschool-video.nosdn.127.net/1792197007859pet_bowls.glb",
+    "/room3d/petal-armchair.glb": "https://ydschool-video.nosdn.127.net/1792197007849petal-armchair.glb",
+    "/room3d/petal-sofa.glb": "https://ydschool-video.nosdn.127.net/1792197007949petal-sofa.glb",
+    "/room3d/pets/bird.glb": "https://ydschool-video.nosdn.127.net/1792197010317bird.glb",
+    "/room3d/pets/cat.glb": "https://ydschool-video.nosdn.127.net/1792197010149cat.glb",
+    "/room3d/pets/dog.glb": "https://ydschool-video.nosdn.127.net/1792197010251dog.glb",
+    "/room3d/pets/shark.glb": "https://ydschool-video.nosdn.127.net/1792197010234shark.glb",
+    "/room3d/pets/slime.glb": "https://ydschool-video.nosdn.127.net/1792197010236slime.glb",
+    "/room3d/pets/snake.glb": "https://ydschool-video.nosdn.127.net/1792197010162snake.glb",
+    "/room3d/pets/turtle.glb": "https://ydschool-video.nosdn.127.net/1792197010286turtle.glb",
+    "/room3d/show_bed.glb": "https://ydschool-video.nosdn.127.net/1792197007247show_bed.glb",
+    "/room3d/show_bedroom_bench.glb": "https://ydschool-video.nosdn.127.net/1792197007051show_bedroom_bench.glb",
+    "/room3d/show_bedroom_low_shelf.glb": "https://ydschool-video.nosdn.127.net/1792197006339show_bedroom_low_shelf.glb",
+    "/room3d/show_bedroom_pouf.glb": "https://ydschool-video.nosdn.127.net/1792197006969show_bedroom_pouf.glb",
+    "/room3d/show_cat_tree.glb": "https://ydschool-video.nosdn.127.net/1792197006938show_cat_tree.glb",
+    "/room3d/show_kitchen_bench.glb": "https://ydschool-video.nosdn.127.net/1792197007288show_kitchen_bench.glb",
+    "/room3d/show_kitchen_counter.glb": "https://ydschool-video.nosdn.127.net/1792197007084show_kitchen_counter.glb",
+    "/room3d/show_kitchen_range.glb": "https://ydschool-video.nosdn.127.net/1792197007326show_kitchen_range.glb",
+    "/room3d/show_living_console.glb": "https://ydschool-video.nosdn.127.net/1792197008172show_living_console.glb",
+    "/room3d/show_living_pouf.glb": "https://ydschool-video.nosdn.127.net/1792197006631show_living_pouf.glb",
+    "/room3d/show_living_sofa.glb": "https://ydschool-video.nosdn.127.net/1792197008407show_living_sofa.glb",
+    "/room3d/show_spa_bucket.glb": "https://ydschool-video.nosdn.127.net/1792197007639show_spa_bucket.glb",
+    "/room3d/show_spa_chest.glb": "https://ydschool-video.nosdn.127.net/1792197006323show_spa_chest.glb",
+    "/room3d/show_spa_pool.glb": "https://ydschool-video.nosdn.127.net/1792197008480show_spa_pool.glb",
+    "/room3d/show_spa_stool.glb": "https://ydschool-video.nosdn.127.net/1792197006667show_spa_stool.glb",
+    "/room3d/show_study_pouf.glb": "https://ydschool-video.nosdn.127.net/1792197007036show_study_pouf.glb",
+    "/room3d/showroom-door.glb": "https://ydschool-video.nosdn.127.net/1792197007987showroom-door.glb",
+    "/room3d/study_ref_cart.glb": "https://ydschool-video.nosdn.127.net/1792197007485study_ref_cart.glb",
+    "/room3d/study_ref_memo.glb": "https://ydschool-video.nosdn.127.net/1792197006302study_ref_memo.glb",
+    "/room3d/study_ref_wall_shelves.glb": "https://ydschool-video.nosdn.127.net/1792197006866study_ref_wall_shelves.glb",
+    "/room3d/study_ref_window.glb": "https://ydschool-video.nosdn.127.net/1792197007434study_ref_window.glb",
+    "/room3d/suite_floor_mirror.glb": "https://ydschool-video.nosdn.127.net/1792197007849suite_floor_mirror.glb",
+    "/room3d/suite_plant_large.glb": "https://ydschool-video.nosdn.127.net/1792197007347suite_plant_large.glb",
+    "/room3d/suite_plant_small.glb": "https://ydschool-video.nosdn.127.net/1792197007724suite_plant_small.glb",
+    "/room3d/suite_window_bedroom.glb": "https://ydschool-video.nosdn.127.net/1792197007812suite_window_bedroom.glb",
+    "/room3d/wardrobe/animal-accessories.glb": "https://ydschool-video.nosdn.127.net/1792197009356animal-accessories.glb",
+    "/room3d/wardrobe/basic-tee-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009439basic-tee-rig.glb",
+    "/room3d/wardrobe/belt-coat-only.glb": "https://ydschool-video.nosdn.127.net/1792197009377belt-coat-only.glb",
+    "/room3d/wardrobe/belt-coat-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008875belt-coat-rig.glb",
+    "/room3d/wardrobe/boots-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009264boots-rig.glb",
+    "/room3d/wardrobe/bow-headband-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009418bow-headband-rig.glb",
+    "/room3d/wardrobe/bow-tie-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009230bow-tie-rig.glb",
+    "/room3d/wardrobe/buckle-shoes-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008682buckle-shoes-rig.glb",
+    "/room3d/wardrobe/cardigan-rig-detail.glb": "https://ydschool-video.nosdn.127.net/1792197009295cardigan-rig-detail.glb",
+    "/room3d/wardrobe/cargo-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008888cargo-rig.glb",
+    "/room3d/wardrobe/collar-shirt-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008899collar-shirt-rig.glb",
+    "/room3d/wardrobe/cropped-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009220cropped-rig.glb",
+    "/room3d/wardrobe/fitted-camisole-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009333fitted-camisole-rig.glb",
+    "/room3d/wardrobe/fitted-sweater-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008815fitted-sweater-rig.glb",
+    "/room3d/wardrobe/fitted-turtleneck-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009683fitted-turtleneck-rig.glb",
+    "/room3d/wardrobe/geta-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008882geta-rig.glb",
+    "/room3d/wardrobe/hood-parka-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009030hood-parka-rig.glb",
+    "/room3d/wardrobe/lace-midboots-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008672lace-midboots-rig.glb",
+    "/room3d/wardrobe/long-skirt-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009642long-skirt-rig.glb",
+    "/room3d/wardrobe/maid-sleeves-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009299maid-sleeves-rig.glb",
+    "/room3d/wardrobe/meshy-ears.glb": "https://ydschool-video.nosdn.127.net/1792197008675meshy-ears.glb",
+    "/room3d/wardrobe/necktie-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008885necktie-rig.glb",
+    "/room3d/wardrobe/original-outfit.glb": "https://ydschool-video.nosdn.127.net/1792197009344original-outfit.glb",
+    "/room3d/wardrobe/qipao-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008829qipao-rig.glb",
+    "/room3d/wardrobe/ruffle-apron-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009365ruffle-apron-rig.glb",
+    "/room3d/wardrobe/sailor-girl.glb": "https://ydschool-video.nosdn.127.net/1792197011827sailor-girl.glb",
+    "/room3d/wardrobe/sailor-school-user.glb": "https://ydschool-video.nosdn.127.net/1792197009622sailor-school-user.glb",
+    "/room3d/wardrobe/school-blazer-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008842school-blazer-rig.glb",
+    "/room3d/wardrobe/school-swimsuit-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009083school-swimsuit-rig.glb",
+    "/room3d/wardrobe/shorts-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009263shorts-rig.glb",
+    "/room3d/wardrobe/sneakers-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008832sneakers-rig.glb",
+    "/room3d/wardrobe/stand-collar-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008913stand-collar-rig.glb",
+    "/room3d/wardrobe/straight-rig.glb": "https://ydschool-video.nosdn.127.net/1792197009300straight-rig.glb",
+    "/room3d/wardrobe/swim-shorts-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008657swim-shorts-rig.glb",
+    "/room3d/wardrobe/tall-boots-rig.glb": "https://ydschool-video.nosdn.127.net/1792197008839tall-boots-rig.glb",
+    "/room3d/wardrobe/thumbnails/buckle-shoes.png": "https://ydschool-video.nosdn.127.net/1792197010060buckle-shoes.png",
+    "/room3d/wardrobe/thumbnails/cat-ears.png": "https://ydschool-video.nosdn.127.net/1792197010083cat-ears.png",
+    "/room3d/wardrobe/thumbnails/cat-tail.png": "https://ydschool-video.nosdn.127.net/1792197009660cat-tail.png",
+    "/room3d/wardrobe/thumbnails/dog-ears.png": "https://ydschool-video.nosdn.127.net/1792197009639dog-ears.png",
+    "/room3d/wardrobe/thumbnails/dog-tail.png": "https://ydschool-video.nosdn.127.net/1792197009996dog-tail.png",
+    "/room3d/wardrobe/thumbnails/fox-ears.png": "https://ydschool-video.nosdn.127.net/1792197009784fox-ears.png",
+    "/room3d/wardrobe/thumbnails/fox-tail.png": "https://ydschool-video.nosdn.127.net/1792197009975fox-tail.png",
+    "/room3d/wardrobe/thumbnails/hood-parka.png": "https://ydschool-video.nosdn.127.net/1792197009686hood-parka.png",
+    "/room3d/wardrobe/thumbnails/lace-midboots.png": "https://ydschool-video.nosdn.127.net/1792197009641lace-midboots.png",
+    "/room3d/wardrobe/thumbnails/lower-cargo.png": "https://ydschool-video.nosdn.127.net/1792197009758lower-cargo.png",
+    "/room3d/wardrobe/thumbnails/lower-shorts.png": "https://ydschool-video.nosdn.127.net/1792197009715lower-shorts.png",
+    "/room3d/wardrobe/thumbnails/original-hoodie.png": "https://ydschool-video.nosdn.127.net/1792197009664original-hoodie.png",
+    "/room3d/wardrobe/thumbnails/original-socks.png": "https://ydschool-video.nosdn.127.net/1792197009582original-socks.png",
+    "/room3d/wardrobe/thumbnails/rabbit-ears.png": "https://ydschool-video.nosdn.127.net/1792197010096rabbit-ears.png",
+    "/room3d/wardrobe/thumbnails/rabbit-tail.png": "https://ydschool-video.nosdn.127.net/1792197009610rabbit-tail.png",
+    "/room3d/wardrobe/thumbnails/sailor-long.png": "https://ydschool-video.nosdn.127.net/1792197009993sailor-long.png",
+    "/room3d/wardrobe/thumbnails/sailor-short.png": "https://ydschool-video.nosdn.127.net/1792197009874sailor-short.png",
+    "/room3d/wardrobe/thumbnails/sailor-shorts.png": "https://ydschool-video.nosdn.127.net/1792197009849sailor-shorts.png",
+    "/room3d/wardrobe/thumbnails/shoe-boots.png": "https://ydschool-video.nosdn.127.net/1792197010069shoe-boots.png",
+    "/room3d/wardrobe/thumbnails/shoe-sneakers.png": "https://ydschool-video.nosdn.127.net/1792197009894shoe-sneakers.png",
+    "/room3d/wardrobe/thumbnails/slouch-cardigan.png": "https://ydschool-video.nosdn.127.net/1792197009749slouch-cardigan.png",
+    "/room3d/wooden_window.glb": "https://ydschool-video.nosdn.127.net/1792197006349wooden_window.glb",
+    "/sar-portraits/Aiven/happy.webp": "https://ydschool-video.nosdn.127.net/1792197012465happy.webp",
+    "/sar-portraits/Aiven/interested.webp": "https://ydschool-video.nosdn.127.net/1792197012405interested.webp",
+    "/sar-portraits/Aiven/normal.webp": "https://ydschool-video.nosdn.127.net/1792197012553normal.webp",
+    "/sar-portraits/Aiven/sad.webp": "https://ydschool-video.nosdn.127.net/1792197012433sad.webp",
+    "/sar-portraits/Aiven/shy.webp": "https://ydschool-video.nosdn.127.net/1792197012465shy.webp",
+    "/sar-portraits/Aiven/sleeping.webp": "https://ydschool-video.nosdn.127.net/1792197012525sleeping.webp",
+    "/sar-portraits/Caian/Enduring Pain.webp": "https://ydschool-video.nosdn.127.net/1792197013368Enduring+Pain.webp",
+    "/sar-portraits/Caian/aboutaster.webp": "https://ydschool-video.nosdn.127.net/1792197013354aboutaster.webp",
+    "/sar-portraits/Caian/avoidant.webp": "https://ydschool-video.nosdn.127.net/1792197013223avoidant.webp",
+    "/sar-portraits/Caian/curious.webp": "https://ydschool-video.nosdn.127.net/1792197013411curious.webp",
+    "/sar-portraits/Caian/embarrassed.webp": "https://ydschool-video.nosdn.127.net/1792197013137embarrassed.webp",
+    "/sar-portraits/Caian/happy.webp": "https://ydschool-video.nosdn.127.net/1792197013107happy.webp",
+    "/sar-portraits/Caian/normal.webp": "https://ydschool-video.nosdn.127.net/1792197012879normal.webp",
+    "/sar-portraits/Caian/normal2.webp": "https://ydschool-video.nosdn.127.net/1792197013103normal2.webp",
+    "/sar-portraits/Caian/serious.webp": "https://ydschool-video.nosdn.127.net/1792197013411serious.webp",
+    "/sar-portraits/Caian/shy.webp": "https://ydschool-video.nosdn.127.net/1792197013134shy.webp",
+    "/sar-portraits/Caian/warm.webp": "https://ydschool-video.nosdn.127.net/1792197012953warm.webp",
+    "/sully/head.png": "https://ydschool-video.nosdn.127.net/1792197012100head.png",
+    "/sully/live2d-2k/1.exp3.json": "https://ydschool-video.nosdn.127.net/17921970120201.exp3.json",
+    "/sully/live2d-2k/2.exp3.json": "https://ydschool-video.nosdn.127.net/17921970121552.exp3.json",
+    "/sully/live2d-2k/3.exp3.json": "https://ydschool-video.nosdn.127.net/17921970122163.exp3.json",
+    "/sully/live2d-2k/4.exp3.json": "https://ydschool-video.nosdn.127.net/17921970120144.exp3.json",
+    "/sully/live2d-2k/5.exp3.json": "https://ydschool-video.nosdn.127.net/17921970122315.exp3.json",
+    "/sully/live2d-2k/6.exp3.json": "https://ydschool-video.nosdn.127.net/17921970119666.exp3.json",
+    "/sully/live2d-2k/7.exp3.json": "https://ydschool-video.nosdn.127.net/17921970119737.exp3.json",
+    "/sully/live2d-2k/Sully.2048/texture_00.png": "https://ydschool-video.nosdn.127.net/1792197012479texture_00.png",
+    "/sully/live2d-2k/Sully.cdi3.json": "https://ydschool-video.nosdn.127.net/1792197012160Sully.cdi3.json",
+    "/sully/live2d-2k/Sully.moc3": "https://ydschool-video.nosdn.127.net/1792197012337Sully.moc3",
+    "/sully/live2d-2k/Sully.model3.json": "https://ydschool-video.nosdn.127.net/1792197012009Sully.model3.json",
+    "/sully/live2d-2k/Sully.physics3.json": "https://ydschool-video.nosdn.127.net/1792197011954Sully.physics3.json",
+    "/assets/build/sar-club-room-CLkOelIz.png": "https://ydschool-video.nosdn.127.net/1792197337780sar-club-room-CLkOelIz.png"
+  },
+  buildPrefixes: {
+    "noto-sans-sc-chinese-simplified-400": "https://ydschool-video.nosdn.127.net/1792197104218noto-sans-sc-chinese-simplified-400-normal.e25467c8-Ba7eOkfT.woff2",
+    "noto-sans-sc-chinese-simplified-500": "https://ydschool-video.nosdn.127.net/1792197101581noto-sans-sc-chinese-simplified-500-normal.d3553b6f-z_irmif2.woff2",
+    "noto-sans-sc-chinese-simplified-700": "https://ydschool-video.nosdn.127.net/1792197103138noto-sans-sc-chinese-simplified-700-normal.6e0a7691-DoUziBww.woff2",
+    "pdf.worker.min": "https://ydschool-video.nosdn.127.net/1792197102409pdf.worker.min-DKQKFyKK.js",
+    reference: "https://ydschool-video.nosdn.127.net/1792197103653reference-D0R8VoIv.fbx",
+    sar: "https://ydschool-video.nosdn.127.net/1792197100595sar-club-room-Dys62SAH.png",
+    "sar-club-room": "https://ydschool-video.nosdn.127.net/1792197337780sar-club-room-CLkOelIz.png"
+  }
+};
+
+// utils/nosAssetResolver.ts
+var ASSETS = nosAssetManifest_default.assets || {};
+var BUILD_PREFIXES = nosAssetManifest_default.buildPrefixes || {};
+function resolveNosCdnUrl(rawPath) {
+  if (!rawPath || typeof rawPath !== "string") return void 0;
+  let path = rawPath.trim();
+  if (/^https?:\/\//i.test(path)) {
+    try {
+      const u = new URL(path);
+      if (typeof location !== "undefined" && u.origin !== location.origin) return void 0;
+      path = u.pathname;
+    } catch {
+      return void 0;
+    }
+  }
+  path = path.split("?")[0].split("#")[0];
+  if (!path.startsWith("/")) path = `/${path}`;
+  if (ASSETS[path]) return ASSETS[path];
+  if (path.startsWith("/assets/build/")) {
+    const file = path.slice("/assets/build/".length);
+    for (const [prefix, cdnUrl] of Object.entries(BUILD_PREFIXES)) {
+      if (file.startsWith(prefix)) return cdnUrl;
+    }
+  }
+  return void 0;
+}
+
 // worker/sw-keep-alive.ts
 var staticManifest = typeof __STATIC_CACHE_MANIFEST__ === "undefined" ? void 0 : __STATIC_CACHE_MANIFEST__;
 var SW_VERSION = "1.20.0";
@@ -1970,12 +2293,41 @@ var resourceCache = staticManifest && createStaticCache({
   },
   digest: async (bytes) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((byte) => byte.toString(16).padStart(2, "0")).join("")
 });
-if (resourceCache) {
-  sw.addEventListener("fetch", (event) => {
+sw.addEventListener("fetch", (event) => {
+  if (event.request.method === "GET") {
+    try {
+      const reqUrl = new URL(event.request.url);
+      const scopeUrl = new URL(sw.registration.scope);
+      if (reqUrl.origin === scopeUrl.origin && reqUrl.pathname.startsWith(scopeUrl.pathname)) {
+        const relPath = "/" + reqUrl.pathname.slice(scopeUrl.pathname.length).replace(/^\/+/, "");
+        const nosUrl = resolveNosCdnUrl(relPath);
+        if (nosUrl) {
+          event.respondWith((async () => {
+            const cache = await sw.caches.open("sully-nos-assets-v1");
+            const cached = await cache.match(nosUrl);
+            if (cached) return cached;
+            const localResp = await fetch(event.request).catch(() => void 0);
+            if (localResp && localResp.ok && !/^text\/html\b/i.test(localResp.headers.get("Content-Type") || "")) {
+              return localResp;
+            }
+            const cdnResp = await fetch(nosUrl, { mode: "cors", credentials: "omit" });
+            if (cdnResp.ok) {
+              event.waitUntil(cache.put(nosUrl, cdnResp.clone()).catch(() => {
+              }));
+            }
+            return cdnResp;
+          })());
+          return;
+        }
+      }
+    } catch {
+    }
+  }
+  if (resourceCache) {
     const result = resourceCache.handle(event.request, (promise) => event.waitUntil(promise));
     if (result) event.respondWith(result.catch(() => Response.error()));
-  });
-}
+  }
+});
 async function tidyResourceCache(cache) {
   const clients = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });
   const scope = new URL(sw.registration.scope);
@@ -2538,5 +2890,16 @@ sw.addEventListener("install", (event) => {
   }));
 });
 sw.addEventListener("activate", (event) => {
-  event.waitUntil(sw.clients.claim());
+  event.waitUntil((async () => {
+    if (!resourceCache && sw.caches) {
+      try {
+        const names = await sw.caches.keys();
+        await Promise.all(
+          names.filter((n) => n.startsWith("sully-static-")).map((n) => sw.caches.delete(n))
+        );
+      } catch {
+      }
+    }
+    await sw.clients.claim();
+  })());
 });

@@ -15,6 +15,27 @@ import { installIOSStatusBarEdge } from './utils/iosStatusBarEdge';
 import { installWakeListener } from './utils/proactivePushConfig';
 import { initAnalytics } from './utils/analytics';
 import { Capacitor } from '@capacitor/core';
+import { installNosAssetRuntimeFallback } from './utils/nosAssetResolver';
+
+installNosAssetRuntimeFallback();
+if (Capacitor.isNativePlatform() && typeof caches !== 'undefined') {
+  caches.keys().then(names => {
+    const staleShells = names.filter(n => n.startsWith('sully-static-'));
+    if (staleShells.length > 0) {
+      Promise.all(staleShells.map(n => caches.delete(n))).then(() => {
+        if (navigator.serviceWorker) {
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            regs.forEach(r => {
+              r.update().catch(() => {});
+              r.waiting?.postMessage({ type: 'SULLY_ACTIVATE_UPDATE' });
+            });
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+}
+
 
 // 默认构建不开启时 Rollup 会整段裁掉；普通浏览器/PWA 不加载原生插件、不申请权限。
 if (import.meta.env.VITE_AMSG_NATIVE_PUSH === 'true' && Capacitor.isNativePlatform()) {
