@@ -5,6 +5,7 @@ import type {
     TavernRegexRule,
 } from '../types';
 import { parseTavernRegexScripts } from './tavernCard';
+import { evaluateDiceRoll } from './worldbook';
 
 const ST_VARIABLE_MACRO_RE = /\{\{(get|set|add|inc|dec)(global)?var::([^:}]+?)(?:::([\s\S]*?))?\}\}/gi;
 const ST_COMMENT_MACRO_RE = /\{\{\/\/[\s\S]*?\}\}/g;
@@ -86,6 +87,10 @@ export function expandTavernMacros(
             changed = true;
             const items = inner.split(',').map(s => s.trim()).filter(Boolean);
             return items.length ? items[Math.floor(Math.random() * items.length)] : '';
+        });
+        result = result.replace(/\{\{\s*roll\s*[:：]{1,2}\s*([^{}]+?)\s*\}\}/gi, (_m, formula: string) => {
+            changed = true;
+            return evaluateDiceRoll(formula);
         });
 
         // 2. Basic identity & clock macros

@@ -5,7 +5,8 @@ import { generateStoryArchiveSummary } from '../../../utils/storyTheaterArchive'
 import { Archive, ArrowBendDownRight, ArrowClockwise, ArrowLeft, Broadcast, CaretDown, CaretLeft, CaretRight, ChatCircleDots, Clock, Database, DownloadSimple, Eye, EyeSlash, FilmSlate, GearSix, HeartStraight, Key, MapPin, PaperPlaneTilt, PencilSimple, SlidersHorizontal, SpinnerGap, Trash, X } from '@phosphor-icons/react';
 import { useOS } from '../../../context/OSContext';
 import TokenImg from '../../os/TokenImg';
-import type { CharacterProfile, Message, StoryTheaterEntry, StoryTheaterMask, StoryTheaterPreset } from '../../../types';
+import type { CharacterProfile, Message, StoryTheaterEntry, StoryTheaterMask, StoryTheaterPreset, TavernRegexRule } from '../../../types';
+import TavernHtmlFrame, { isTavernRichHtmlBlock } from '../../chat/TavernHtmlFrame';
 import { DB } from '../../../utils/db';
 import { ContextBuilder } from '../../../utils/context';
 import { safeResponseJson, extractContent } from '../../../utils/safeApi';
@@ -200,10 +201,48 @@ const StorySceneRelationships: React.FC<{ inputs: StoryAffinityInput[] }> = ({ i
     })}</div>
 </div>;
 
-export const StoryOutput: React.FC<{ content: string; onChoose?: (text: string) => void; affinityInputs: StoryAffinityInput[] }> = ({ content, onChoose, affinityInputs }) => {
+const renderStoryProseWithHtml = (text: string, onChoose?: (text: string) => void, proseClass = 'font-serif text-[15px] leading-8 text-slate-800 whitespace-pre-wrap') => {
+    const parts = String(text || '').split(/(```[\s\S]*?```)/g);
+    return parts.map((part, idx) => {
+        if (!part.trim()) return null;
+        if (part.startsWith('```') && part.endsWith('```')) {
+            const inner = part.replace(/^```[^\n]*\n?/, '').replace(/```$/, '');
+            if (isTavernRichHtmlBlock(inner)) {
+                return <TavernHtmlFrame key={idx} html={inner} onSendChoice={onChoose} />;
+            }
+        }
+        if (isTavernRichHtmlBlock(part)) {
+            return <TavernHtmlFrame key={idx} html={part} onSendChoice={onChoose} />;
+        }
+        return <p key={idx} className={proseClass}>{part.trim()}</p>;
+    });
+};
+
+export const StoryOutput: React.FC<{
+    content: string;
+    onChoose?: (text: string) => void;
+    affinityInputs: StoryAffinityInput[];
+    regexRules?: TavernRegexRule[];
+    userName?: string;
+    charName?: string;
+}> = ({ content, onChoose, affinityInputs, regexRules, userName, charName }) => {
     const {theme} = useOS();
     const reading = meetingAppearance(theme.storyAppearance).id !== 'none';
-    const blocks = parseStoryDisplayBlocks(content);
+    const transformedContent = useMemo(() => {
+        if (!regexRules || regexRules.length === 0) return content;
+        const htmlOrCustomRules = regexRules.filter(r => r.enabled && r.applyOnDisplay && (
+            /<!DOCTYPE|<html|<script|<style|```/i.test(r.replacement || '')
+            || /SceneInfo|environment_details|sexual_combat_result|主页|<cot>/i.test(r.pattern || '')
+        ));
+        if (htmlOrCustomRules.length === 0) return content;
+        return applyTavernRegexRules(content, htmlOrCustomRules, {
+            timing: 'display',
+            role: 'ai',
+            userName: userName || '你',
+            charName: charName || '角色',
+        });
+    }, [content, regexRules, userName, charName]);
+    const blocks = parseStoryDisplayBlocks(transformedContent);
     const relationshipSceneIndex = blocks.findIndex(block => block.kind === 'scene');
     const hasScene = relationshipSceneIndex >= 0;
     const relationship = affinityInputs.length > 0 ? <StorySceneRelationships inputs={affinityInputs} /> : null;
@@ -220,7 +259,7 @@ export const StoryOutput: React.FC<{ content: string; onChoose?: (text: string) 
         {blocks.map((block, index) => {
             const lines = splitDisplayLines(block.text);
             if (block.kind === 'story' && reading) return null;
-            if (block.kind === 'story') return <p key={index} className='font-serif text-[15px] leading-8 text-slate-800 whitespace-pre-wrap'>{block.text}</p>;
+            if (block.kind === 'story') return <div key={index} className='space-y-4'>{renderStoryProseWithHtml(block.text, onChoose)}</div>;
             if (block.kind === 'scene') return <section key={index} className='py-4 border-y border-slate-300'>
                 <div className='flex items-center gap-2 text-[9px] tracking-[.22em] uppercase font-bold text-violet-600'><FilmSlate size={14} weight='fill' />{block.title}</div>
                 <div className='mt-3 grid grid-cols-2 gap-x-5 gap-y-3'>{lines.map((line, lineIndex) => <div key={lineIndex} className={line.label === '场面' ? 'col-span-2' : ''}><div className='flex items-center gap-1 text-[9px] font-bold text-slate-400'>{line.label === '时间' ? <Clock size={11} /> : line.label === '地点' ? <MapPin size={11} /> : null}{line.label || '场景'}</div><div className='mt-1 text-[12px] leading-5 text-slate-700'>{line.value}</div></div>)}</div>
@@ -270,7 +309,7 @@ export const StoryOutput: React.FC<{ content: string; onChoose?: (text: string) 
             return <section key={index} className='pl-4 border-l-2 border-slate-300'><div className='text-[10px] font-bold text-slate-500'>{block.title || '附加信息'}</div><div className='mt-2'><LabeledRows lines={lines} /></div></section>;
         })}
     </div>;
-    return reading ? <div><div className='meeting-prose'>{blocks.filter(block=>block.kind==='story').map((block,index)=><p key={index}>{block.text}</p>)}</div>{(blocks.some(block=>block.kind!=='story')||relationship)&&<details className='mt-5 text-slate-500'><summary className='cursor-pointer text-xs py-2'>场景与补充</summary>{rendered}</details>}</div> : rendered;
+    return reading ? <div><div className='meeting-prose'>{blocks.filter(block=>block.kind==='story').map((block,index)=><div key={index} className='space-y-4'>{renderStoryProseWithHtml(block.text, onChoose, '')}</div>)}</div>{(blocks.some(block=>block.kind!=='story')||relationship)&&<details className='mt-5 text-slate-500'><summary className='cursor-pointer text-xs py-2'>场景与补充</summary>{rendered}</details>}</div> : rendered;
 };
 
 const StoryTheaterSession: React.FC<Props> = ({ entry, preset, masks, onBack, onEdit, onOpenVectorMemory, onOpenArchives, onEntryChange }) => {
@@ -284,10 +323,18 @@ const StoryTheaterSession: React.FC<Props> = ({ entry, preset, masks, onBack, on
     const mask = useMemo(() => resolveStoryTheaterMask(entry.mask, userProfile, characters, masks), [characters, entry.mask, masks, userProfile]);
     const youLabel = mask.selection.type === 'user' ? '你' : `你（${mask.name}）`;
     const promptIdentityName = mask.name.trim() && mask.name.trim() !== '你' ? mask.name.trim() : '当前用户侧角色';
-    const effectivePreset = useMemo<StoryTheaterPreset>(() => ({
-        ...preset,
-        document: resolveStoryPresetDocument(preset, entry.presetOverride),
-    }), [entry.presetOverride, preset]);
+    const effectivePreset = useMemo<StoryTheaterPreset>(() => {
+        const doc = resolveStoryPresetDocument(preset, entry.presetOverride);
+        const actorRegexRules = actors.flatMap(a => a.tavernRegexRules || []);
+        if (actorRegexRules.length === 0) return { ...preset, document: doc };
+        return {
+            ...preset,
+            document: {
+                ...doc,
+                regexRules: [...actorRegexRules, ...(doc.regexRules || [])],
+            },
+        };
+    }, [actors, entry.presetOverride, preset]);
     const activeMiniTheater = useMemo(() => getActiveStoryMiniTheaterPrompt(effectivePreset.document), [effectivePreset.document]);
     const affinityEnabled = useMemo(() => effectivePreset.document.prompts.some(prompt => prompt.id === 'nmj-v65-affinity-control' && prompt.enabled), [effectivePreset.document]);
     const selectedBooks = useMemo(() => dedupeTheaterWorldbooks(actors).filter(book => entry.selectedWorldbookIds.includes(book.id)), [actors, entry.selectedWorldbookIds]);
@@ -886,13 +933,13 @@ const StoryTheaterSession: React.FC<Props> = ({ entry, preset, masks, onBack, on
                                 {isExpanded && <div className='pb-5 pl-7'>
                                     {message.role === 'user'
                                         ? <p className='text-sm leading-7 text-slate-600 whitespace-pre-wrap'>{message.content}</p>
-                                        : <StoryOutput content={message.content} affinityInputs={affinityInputsFromMessage(message, actors)} />}
+                                        : <StoryOutput content={message.content} affinityInputs={affinityInputsFromMessage(message, actors)} regexRules={effectivePreset.document.regexRules} userName={promptIdentityName} charName={actors.map(a => a.name).join('、')} />}
                                 </div>}
                             </details>;
                         }
                         if (message.role === 'user') return <section key={message.id} {...pressHandlersFor(message)} className='meeting-user-turn pl-4 border-l-2 border-violet-300'><div className='meeting-user-label text-[9px] tracking-[.16em] font-bold text-violet-500'>你写下</div><p className='meeting-prose mt-2 text-sm leading-7 text-slate-600 whitespace-pre-wrap'>{message.content}</p></section>;
                         const isLatest = message.id === messages[messages.length - 1]?.id;
-                        return <article key={message.id} {...pressHandlersFor(message)}><StoryOutput content={message.content} onChoose={choice => setInput(choice)} affinityInputs={affinityInputsFromMessage(message, actors)} />{isLatest && <div className='mt-4 flex items-center justify-end gap-2'><span className='w-1.5 h-1.5 rounded-full bg-violet-400' /><button disabled={sending} onClick={() => void send(message)} className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-500 disabled:opacity-40'>{rerollingId === message.id ? <SpinnerGap size={12} className='animate-spin' /> : <ArrowClockwise size={12} />}换一种写法</button></div>}</article>;
+                        return <article key={message.id} {...pressHandlersFor(message)}><StoryOutput content={message.content} onChoose={choice => setInput(choice)} affinityInputs={affinityInputsFromMessage(message, actors)} regexRules={effectivePreset.document.regexRules} userName={promptIdentityName} charName={actors.map(a => a.name).join('、')} />{isLatest && <div className='mt-4 flex items-center justify-end gap-2'><span className='w-1.5 h-1.5 rounded-full bg-violet-400' /><button disabled={sending} onClick={() => void send(message)} className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-bold text-slate-500 disabled:opacity-40'>{rerollingId === message.id ? <SpinnerGap size={12} className='animate-spin' /> : <ArrowClockwise size={12} />}换一种写法</button></div>}</article>;
                     })}
                 </div>
                 {pageCount > 1 && <StoryPagination className='mt-8' page={messagePage} pageCount={pageCount} onChange={setMessagePage} />}

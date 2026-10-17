@@ -82,8 +82,8 @@ export function buildReplySnapshotContent(msg: { type?: string; content: string 
 const normalizeAiContent = (raw: string): string => {
     let cleaned = normalizeAssistantActionFormatting(raw || '');
     // Strip hidden chain-of-thought blocks: <think> / <thinking> / <thought> / <draft> / <!-- charThink/plotThink -->
-    cleaned = cleaned.replace(/<(think|thinking|thought|draft)>[\s\S]*?<\/\1>/gi, '');
-    cleaned = cleaned.replace(/<(?:think|thinking|thought|draft)>[\s\S]*$/gi, '');
+    cleaned = cleaned.replace(/<(think|thinking|thought|draft|cot)>[\s\S]*?<\/\1>/gi, '');
+    cleaned = cleaned.replace(/<(?:think|thinking|thought|draft|cot)>[\s\S]*$/gi, '');
     cleaned = cleaned.replace(/<!--\s*(?:charThink|plotThink)[\s\S]*?-->/gi, '');
     cleaned = cleaned.replace(/\[\d{4}[-/年]\d{1,2}[-/月]\d{1,2}.*?\]/g, '');
     cleaned = cleaned.replace(/^[\w一-龥]+:\s*/, '');
@@ -796,14 +796,14 @@ export async function applyAssistantPostProcessing(
             || ''
         ).trim();
         const thinkBlocks: string[] = [];
-        const thinkPat = /<(think|thinking|thought)>([\s\S]*?)<\/\1>/gi;
+        const thinkPat = /<(think|thinking|thought|cot)>([\s\S]*?)<\/\1>/gi;
         let tm: RegExpExecArray | null;
         while ((tm = thinkPat.exec(lastRaw)) !== null) {
             const t = tm[2].trim();
             if (t) thinkBlocks.push(t);
         }
-        if (!/<\/(?:think|thinking|thought)>/i.test(lastRaw)) {
-            const openOnly = lastRaw.match(/<(?:think|thinking|thought)>([\s\S]*$)/i);
+        if (!/<\/(?:think|thinking|thought|cot)>/i.test(lastRaw)) {
+            const openOnly = lastRaw.match(/<(?:think|thinking|thought|cot)>([\s\S]*$)/i);
             if (openOnly && openOnly[1].trim()) thinkBlocks.push(openOnly[1].trim());
         }
         const chain = [lastReasoning, ...thinkBlocks].filter(s => !!s).join('\n\n').trim();
@@ -965,12 +965,21 @@ export async function applyAssistantPostProcessing(
                 if (part.type === 'emoji') {
                     await replyStep(async () => sendEmojiBubble(part.content));
                 } else {
-                    const rawBlocks = part.content.split(/^\s*---\s*$/m).filter(b => b.trim());
+                    const isStructuredTavernReply = /<(?:SceneInfo|environment_details|sexual_combat_result|now_plot|scene_time|action)\b/i.test(part.content)
+                        || /```(?:html)?\s*(?:<!--[\s\S]*?-->\s*)*<!DOCTYPE\s+html/i.test(part.content)
+                        || Boolean(char.tavernRegexRules?.some(r => r.enabled && r.applyOnDisplay));
+                    const rawBlocks = isStructuredTavernReply
+                        ? [part.content.trim()].filter(Boolean)
+                        : part.content.split(/^\s*---\s*$/m).filter(b => b.trim());
                     const allChunks: string[] = [];
-                    for (const block of rawBlocks) {
-                        allChunks.push(...ChatParser.chunkText(block.trim()));
+                    if (isStructuredTavernReply) {
+                        if (part.content.trim()) allChunks.push(part.content.trim());
+                    } else {
+                        for (const block of rawBlocks) {
+                            allChunks.push(...ChatParser.chunkText(block.trim()));
+                        }
+                        if (allChunks.length === 0 && part.content.trim()) allChunks.push(part.content.trim());
                     }
-                    if (allChunks.length === 0 && part.content.trim()) allChunks.push(part.content.trim());
 
                     for (let i = 0; i < allChunks.length; i++) {
                         let chunk = allChunks[i];

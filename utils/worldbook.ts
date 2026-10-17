@@ -212,6 +212,21 @@ export const isWorldbookEntryActive = (
     return true;
 };
 
+
+export const evaluateDiceRoll = (formula: string): string => {
+    const cleaned = String(formula || '').trim();
+    const match = cleaned.match(/^(?:(\d+)?d)?(\d+)\s*([+-]\s*\d+)?$/i);
+    if (!match) return '1';
+    const count = Math.min(100, Math.max(1, match[1] ? parseInt(match[1], 10) : 1));
+    const sides = Math.max(1, parseInt(match[2], 10) || 20);
+    const mod = match[3] ? parseInt(match[3].replace(/\s+/g, ''), 10) || 0 : 0;
+    let total = mod;
+    for (let i = 0; i < count; i += 1) {
+        total += Math.floor(Math.random() * sides) + 1;
+    }
+    return String(total);
+};
+
 export const expandWorldbookMacros = (content: string, charName: string, userName: string): string => {
     let expanded = content;
     if (charName) expanded = expanded.replace(/{{\s*char\s*}}/gi, charName);
@@ -224,6 +239,10 @@ export const expandWorldbookMacros = (content: string, charName: string, userNam
     expanded = expanded.replace(/\{\{random:([^{}]+)\}\}/gi, (_m, inner: string) => {
         const items = inner.split(',').map(s => s.trim()).filter(Boolean);
         return items.length ? items[Math.floor(Math.random() * items.length)] : '';
+    });
+    // Support {{roll:1d20}}, {{roll:2d6+3}}, {{roll:d100}}, {{roll:20}}
+    expanded = expanded.replace(/\{\{\s*roll\s*[:：]{1,2}\s*([^{}]+?)\s*\}\}/gi, (_m, formula: string) => {
+        return evaluateDiceRoll(formula);
     });
     return expanded;
 };
@@ -487,12 +506,20 @@ export const parseStandardWorldbook = (
     const books = rawEntries.flatMap((value: any, index: number): Worldbook[] => {
         if (!value || typeof value !== 'object' || typeof value.content !== 'string') return [];
         const uid = Number.isFinite(Number(value.uid ?? value.id)) ? Number(value.uid ?? value.id) : index;
-        // Support SillyTavern character_book position strings ('before_char' | 'after_char') as well as numeric 0..6
-        const rawPos = value.position === 'before_char'
-            ? 0
-            : value.position === 'after_char'
-                ? 1
-                : value.extensions?.position ?? value.position;
+        // Support SillyTavern character_book numeric extensions.position (0..6) first, then position strings ('before_char' | 'after_char') or numeric position
+        const extPosNum = value.extensions?.position !== undefined && value.extensions?.position !== null && value.extensions?.position !== ''
+            ? Number(value.extensions.position)
+            : NaN;
+        const directPosNum = typeof value.position === 'number' ? value.position : NaN;
+        const rawPos = Number.isFinite(extPosNum)
+            ? extPosNum
+            : Number.isFinite(directPosNum)
+                ? directPosNum
+                : value.position === 'before_char'
+                    ? 0
+                    : value.position === 'after_char'
+                        ? 1
+                        : value.extensions?.position ?? value.position;
         const position = clamp(rawPos, 0, 6, 1) as WorldbookPosition;
         const rawRoleVal = value.role ?? value.extensions?.role;
         const rawRole = rawRoleVal == null ? null : clamp(rawRoleVal, 0, 2, 0) as WorldbookDepthRole;

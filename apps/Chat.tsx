@@ -39,6 +39,9 @@ import { isMcdActivatedInMessages, MCD_ACTIVATE_TRIGGER, MCD_DEACTIVATE_TRIGGER 
 import { isLuckinConfigured } from '../utils/luckinMcpClient';
 import { isLuckinActivatedInMessages, LUCKIN_ACTIVATE_TRIGGER, LUCKIN_DEACTIVATE_TRIGGER } from '../utils/luckinToolBridge';
 import MessageItem, { ThinkingChainBlock } from '../components/chat/MessageItem';
+import { resolveEffectivePresetIdForChar } from '../utils/tavernPreset';
+import { withBuiltInStoryPresets } from '../utils/storyTheater';
+import type { TavernRegexRule } from '../types';
 import McdMiniApp from '../components/mcd/McdMiniApp';
 import LuckinMiniApp from '../components/luckin/LuckinMiniApp';
 import LuckinLocationModal from '../components/luckin/LuckinLocationModal';
@@ -3513,6 +3516,53 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
         onOpenSettings: () => setShowThinkingChainModal(true),
     }), [char?.thinkingChainStyle, char?.thinkingChainCustomColors, osTheme.chatPsyche]);
 
+    const [presetDisplayRegexRules, setPresetDisplayRegexRules] = useState<TavernRegexRule[]>([]);
+    useEffect(() => {
+        let cancelled = false;
+        const effId = resolveEffectivePresetIdForChar(char?.boundChatPresetId);
+        if (!effId) {
+            setPresetDisplayRegexRules([]);
+            return;
+        }
+        DB.getStoryTheaterPresets().then(stored => {
+            if (cancelled) return;
+            const found = withBuiltInStoryPresets(stored).find(p => p.id === effId);
+            setPresetDisplayRegexRules(found?.document?.regexRules || []);
+        }).catch(() => {
+            if (!cancelled) setPresetDisplayRegexRules([]);
+        });
+        return () => { cancelled = true; };
+    }, [char?.id, char?.boundChatPresetId]);
+
+    const activeDisplayRegexRules = useMemo<TavernRegexRule[]>(() => {
+        const charRules = char?.tavernRegexRules || [];
+        if (charRules.length === 0 && presetDisplayRegexRules.length === 0) return [];
+        return [...charRules, ...presetDisplayRegexRules];
+    }, [char?.tavernRegexRules, presetDisplayRegexRules]);
+
+    const handleSwitchGreeting = useCallback(async (msg: Message, nextIndex: number) => {
+        const greetings = char?.tavernGreetings || [];
+        if (!char || greetings.length <= 1) return;
+        const safeIdx = ((nextIndex % greetings.length) + greetings.length) % greetings.length;
+        const nextText = (greetings[safeIdx] || '').trim();
+        if (!nextText) return;
+        await DB.updateMessage(msg.id, nextText);
+        await DB.updateMessageMetadata(msg.id, (prev) => ({
+            ...(prev || {}),
+            tavernGreetingIndex: safeIdx,
+            tavernGreetingTotal: greetings.length,
+        }));
+        setMessages(prev => prev.map(item => item.id === msg.id ? {
+            ...item,
+            content: nextText,
+            metadata: {
+                ...(item.metadata || {}),
+                tavernGreetingIndex: safeIdx,
+                tavernGreetingTotal: greetings.length,
+            },
+        } : item));
+    }, [char]);
+
     // 工具痕迹那行灰字要贴着气泡走，所以把气泡自带的组间距（MessageItem 里那组
     // mb-3 / mb-6 / mb-8）抵掉大半。组内的气泡本来就挨着，不用抵。
     const toolTracePullClass = osTheme.chatMessageSpacing === 'compact' ? '-mt-2'
@@ -4238,6 +4288,22 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
                             onResolveLifeRecord={handleResolveLifeRecord}
                             onOpenCollaborationFile={handleOpenCollaborationFile}
                             thinkingChainOptions={thinkingChainOptions}
+                            userName={userProfile.name}
+                            tavernRegexRules={activeDisplayRegexRules}
+                            greetingSwitcher={
+                                i === 0
+                                && m.role === 'assistant'
+                                && Array.isArray(char.tavernGreetings)
+                                && char.tavernGreetings.length > 1
+                                    ? {
+                                        currentIndex: typeof m.metadata?.tavernGreetingIndex === 'number'
+                                            ? m.metadata.tavernGreetingIndex
+                                            : Math.max(0, char.tavernGreetings.findIndex(g => g.trim() === m.content.trim())),
+                                        total: char.tavernGreetings.length,
+                                        onSwitch: (nextIdx) => void handleSwitchGreeting(m, nextIdx),
+                                    }
+                                    : undefined
+                            }
                         />
                         {showToolTrace && (
                             <div className={`px-3 mb-4 ${breaksWithNext ? toolTracePullClass : ''}`}>
@@ -4312,6 +4378,8 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
                                     messageSpacing={osTheme.chatMessageSpacing}
                                     showTimestamp={osTheme.chatShowTimestamp}
                                     thinkingChainOptions={thinkingChainOptions}
+                                    userName={userProfile.name}
+                                    tavernRegexRules={activeDisplayRegexRules}
                                 />
                             </div>
                         ))}

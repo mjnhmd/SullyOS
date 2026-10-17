@@ -4,7 +4,9 @@ import { avatarDecorationImageStyle, isAnniversaryFrame } from '../../utils/anni
 
 import React, { useEffect, useRef, useState } from 'react';
 const AivenFishSaleReceipt = React.lazy(() => import('../../apps/vrWorld/AivenFishSaleReceipt').then(module => ({ default: module.AivenFishSaleReceipt })));
-import { Message, ChatTheme } from '../../types';
+import { Message, ChatTheme, TavernRegexRule } from '../../types';
+import { applyTavernRegexRules } from '../../utils/tavernPreset';
+import TavernHtmlFrame, { isTavernRichHtmlBlock } from './TavernHtmlFrame';
 import { phoneFieldToText } from '../../utils/phoneEvidence';
 import { tryParseLifeSimResetCard } from '../../utils/lifeSimChatCard';
 import { VALID_INTERJECTION_TAGS, cleanVoiceMarkupForDisplay } from '../../utils/minimaxTts';
@@ -1139,6 +1141,15 @@ interface MessageItemProps {
         customColors?: { bg?: string; accent?: string; text?: string };
         onOpenSettings?: () => void;
     };
+    /** 酒馆显示正则与用户名 */
+    userName?: string;
+    tavernRegexRules?: TavernRegexRule[];
+    /** 多开场白切换（首条开场白消息支持 < 1/N > 左右切换） */
+    greetingSwitcher?: {
+        currentIndex: number;
+        total: number;
+        onSwitch: (nextIndex: number) => void;
+    };
 }
 
 const MessageItem = React.memo(({
@@ -1184,6 +1195,9 @@ const MessageItem = React.memo(({
     onResolveLifeRecord,
     onOpenCollaborationFile,
     thinkingChainOptions,
+    userName,
+    tavernRegexRules,
+    greetingSwitcher,
 }: MessageItemProps) => {
     const isUser = m.role === 'user';
     const isSystem = m.role === 'system';
@@ -3190,14 +3204,20 @@ const MessageItem = React.memo(({
         // 1. Split by Code Blocks (triple backtick)
         const parts = text.split(/(```[\s\S]*?```)/g);
         return parts.map((part, index) => {
-            // Render Code Block
+            // Render Code Block (or sandboxed Tavern HTML Panel if it is a <!DOCTYPE html> / rich HTML block)
             if (part.startsWith('```') && part.endsWith('```')) {
-                const codeContent = part.replace(/^```\w*\n?/, '').replace(/```$/, '');
+                const codeContent = part.replace(/^```[^\n]*\n?/, '').replace(/```$/, '');
+                if (isTavernRichHtmlBlock(codeContent)) {
+                    return <TavernHtmlFrame key={index} html={codeContent} />;
+                }
                 return (
                     <pre key={index} className="bg-black/80 text-gray-100 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2 whitespace-pre shadow-inner border border-white/10">
                         {codeContent}
                     </pre>
                 );
+            }
+            if (isTavernRichHtmlBlock(part)) {
+                return <TavernHtmlFrame key={index} html={part} />;
             }
 
             // Clean stray backtick artifacts from non-code text
@@ -3232,7 +3252,16 @@ const MessageItem = React.memo(({
     };
 
     // Robust content cleanup: strip legacy markers, separators, bilingual tags, stray formatting
-    const stripJunk = (s: string) => stripFishCuesForDisplay(stripLeakedSourceTags(s)
+    // Protect fenced code blocks (```...```) so Tavern HTML panels are not mangled by backtick/whitespace cleanup
+    const stripJunk = (s: string) => {
+        const fencedBlocks: string[] = [];
+        const FENCE_TOKEN = '__SULLY_FENCED_BLOCK_';
+        const guarded = String(s || '').replace(/```[\s\S]*?```/g, (match) => {
+            const idx = fencedBlocks.length;
+            fencedBlocks.push(match);
+            return `${FENCE_TOKEN}${idx}__`;
+        });
+        const cleaned = stripFishCuesForDisplay(stripLeakedSourceTags(guarded)
         .replace(/%%TRANS%%[\s\S]*/gi, '')           // legacy translation marker
         .replace(/%%BILINGUAL%%/gi, '\n')            // raw bilingual marker → newline
         // stray bilingual XML tags — 容错版：全角括号/斜杠、标签内空格、简繁、少写 `>` 的截断形态
@@ -3262,12 +3291,25 @@ const MessageItem = React.memo(({
         .replace(/[ \t]+([，。！？、；：,.!?…])/g, '$1')
         .replace(/\n{3,}/g, '\n\n')                  // collapse excess newlines
         .trim());   // ⚠️ 末尾再洗一遍鱼声情绪 cue（[excited]/[pause]/(laughs) 等），避免漏到气泡/翻译里
+        return fencedBlocks.length > 0
+            ? cleaned.replace(/__SULLY_FENCED_BLOCK_(\d+)__/g, (_m, n) => fencedBlocks[Number(n)] ?? '')
+            : cleaned;
+    };
 
     const sarSurfaceText = typeof m.metadata?.sarModuleSurface?.surface === 'string'
         ? m.metadata.sarModuleSurface.surface.trim()
         : '';
     const hasSarSurface = !!sarSurfaceText;
-    const rawContent = hasSarSurface && !showSarTruth ? sarSurfaceText : m.content;
+    const baseRawContent = (hasSarSurface && !showSarTruth ? sarSurfaceText : m.content)
+        .replace(/<cot>[\s\S]*?<\/cot>/gi, '');
+    const rawContent = (tavernRegexRules && tavernRegexRules.length > 0 && !isSystem)
+        ? applyTavernRegexRules(baseRawContent, tavernRegexRules, {
+            timing: 'display',
+            role: isUser ? 'user' : 'ai',
+            userName: userName || '你',
+            charName: charName || '角色',
+        })
+        : baseRawContent;
 
     // 语音文字（转文字面板 / 语音条预览）显示前：先洗 MiniMax 标记，再洗鱼声情绪 cue，
     // 两家服务商的演出标记都不会漏给用户看。
@@ -3391,6 +3433,46 @@ const MessageItem = React.memo(({
                 <div className="sar-chat-speech-control" style={{ color: styleConfig.textColor }}>
                     <SARSpeechSwitch truth={showSarTruth} moduleTitle={m.metadata?.sarModuleSurface?.moduleTitle}
                         onToggle={() => setShowSarTruth(value => !value)} />
+                </div>
+            )}
+
+            {/* 酒馆多开场白切换器（首条开场白支持左右切换） */}
+            {greetingSwitcher && greetingSwitcher.total > 1 && (
+                <div
+                    className="relative z-10 mt-2.5 pt-2 flex items-center justify-between gap-2 select-none"
+                    style={{ borderTop: '1px solid rgba(127, 127, 127, 0.16)' }}
+                    onClick={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                >
+                    <span className="text-[10px] font-medium opacity-55" style={{ color: styleConfig.textColor }}>
+                        开场白 {greetingSwitcher.currentIndex + 1} / {greetingSwitcher.total}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const prevIdx = (greetingSwitcher.currentIndex - 1 + greetingSwitcher.total) % greetingSwitcher.total;
+                                greetingSwitcher.onSwitch(prevIdx);
+                            }}
+                            className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-black/5 hover:bg-black/10 active:scale-95 transition-all"
+                            style={{ color: styleConfig.textColor }}
+                        >
+                            ‹ 上一开局
+                        </button>
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const nextIdx = (greetingSwitcher.currentIndex + 1) % greetingSwitcher.total;
+                                greetingSwitcher.onSwitch(nextIdx);
+                            }}
+                            className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-black/5 hover:bg-black/10 active:scale-95 transition-all"
+                            style={{ color: styleConfig.textColor }}
+                        >
+                            下一开局 ›
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -3638,7 +3720,10 @@ const MessageItem = React.memo(({
            prev.suppressEntranceAnimation === next.suppressEntranceAnimation &&
            prev.voiceData?.url === next.voiceData?.url &&
            prev.voiceLoading === next.voiceLoading &&
-           prev.isVoicePlaying === next.isVoicePlaying;
+           prev.isVoicePlaying === next.isVoicePlaying &&
+           prev.tavernRegexRules === next.tavernRegexRules &&
+           prev.greetingSwitcher?.currentIndex === next.greetingSwitcher?.currentIndex &&
+           prev.greetingSwitcher?.total === next.greetingSwitcher?.total;
 });
 
 // System-authored diary/settlement/call cards bypass the normal bubble layout.

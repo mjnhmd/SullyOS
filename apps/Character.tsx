@@ -69,8 +69,9 @@ const CharacterCard: React.FC<{
     /** 当前激活（正在聊）的角色走淡紫高亮 */
     active?: boolean;
     onClick: () => void;
+    onQuickChat?: (e: React.MouseEvent) => void;
     onDelete: (e: React.MouseEvent) => void;
-}> = ({ char, active, onClick, onDelete }) => (
+}> = ({ char, active, onClick, onQuickChat, onDelete }) => (
     <div
         data-guide={char.id === 'preset-sully-v2' ? 'sully-card' : undefined}
         onClick={onClick}
@@ -82,15 +83,34 @@ const CharacterCard: React.FC<{
             <div className="w-14 h-14 shrink-0 rounded-full overflow-hidden border border-violet-100 bg-violet-50">
                 <TokenImg value={char.avatar} className="w-full h-full object-cover" alt={char.name} />
             </div>
-            <div className="flex-1 min-w-0 pr-6">
-                <h3 className="text-lg font-bold truncate text-slate-800">
-                    {char.name}
-                </h3>
+            <div className="flex-1 min-w-0 pr-16">
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <h3 className="text-lg font-bold truncate text-slate-800">
+                        {char.name}
+                    </h3>
+                    {Array.isArray(char.tavernGreetings) && char.tavernGreetings.length > 1 && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-violet-50 border border-violet-200/70 text-[10px] font-medium text-violet-500">
+                            {char.tavernGreetings.length} 开局
+                        </span>
+                    )}
+                </div>
                 <p className="text-xs truncate mt-0.5 text-violet-400/80">
                     {char.description || '暂无描述'}
                 </p>
             </div>
         </div>
+        {onQuickChat && (
+            <button
+                type="button"
+                title="直接进入聊天"
+                onClick={onQuickChat}
+                className="absolute top-1/2 -translate-y-1/2 right-12 w-7 h-7 flex items-center justify-center rounded-full bg-violet-50 border border-violet-200/80 text-violet-500 hover:bg-violet-100 active:scale-90 transition-colors"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926H16.5a.75.75 0 0 1 0 1.5H3.693l-1.414 4.926a.75.75 0 0 0 .826.95 28.897 28.897 0 0 0 15.293-7.155.75.75 0 0 0 0-1.114A28.897 28.897 0 0 0 3.105 2.288Z" />
+                </svg>
+            </button>
+        )}
         <button
             onClick={onDelete}
             className="absolute top-1/2 -translate-y-1/2 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-slate-50 border border-slate-100 text-slate-300 hover:text-violet-400 hover:border-violet-200 active:scale-90 transition-colors"
@@ -1152,10 +1172,13 @@ ${isInitialGeneration ? `
           let importedCharCount = 0;
           let importedWbCount = 0;
           const importedNames: string[] = [];
+          const warnings: string[] = [];
+          const createdGroupIds: string[] = [];
+          const localGroups = [...characterGroups];
 
           for (const file of files) {
               const parsed = await parseAnyCharacterCardFile(file);
-              const newChar = parsed.character;
+              if (parsed.warning) warnings.push(parsed.warning);
 
               for (const wb of parsed.worldbooks) {
                   if (!wb.id || worldbooks.some(existing => existing.id === wb.id)) continue;
@@ -1163,27 +1186,64 @@ ${isInitialGeneration ? `
                   importedWbCount++;
               }
 
-              await DB.saveCharacter(newChar);
-              // 若酒馆角色卡带有开场白 first_mes，自动写入首条聊天消息
-              if (parsed.greetings.length > 0 && parsed.greetings[0].trim()) {
-                  await DB.saveMessage({
-                      charId: newChar.id,
-                      role: 'assistant',
-                      type: 'text',
-                      content: parsed.greetings[0].trim(),
-                      timestamp: Date.now(),
-                  });
+              let targetGroupId: string | undefined;
+              if (parsed.suggestedGroupName) {
+                  const gName = parsed.suggestedGroupName.trim();
+                  let group = localGroups.find(g => g.name === gName) || null;
+                  if (!group) {
+                      group = await createCharacterGroup(gName);
+                      if (group) localGroups.push(group);
+                  }
+                  if (group) {
+                      targetGroupId = group.id;
+                      if (!createdGroupIds.includes(group.id)) createdGroupIds.push(group.id);
+                  }
               }
-              importedCharCount++;
-              importedNames.push(newChar.name);
+
+              const entriesToSave = parsed.characters && parsed.characters.length > 0
+                  ? parsed.characters
+                  : [{ character: parsed.character, greetings: parsed.greetings }];
+
+              for (const item of entriesToSave) {
+                  const charToSave: CharacterProfile = targetGroupId
+                      ? { ...item.character, groupId: targetGroupId }
+                      : item.character;
+                  await DB.saveCharacter(charToSave);
+                  if (item.greetings.length > 0 && item.greetings[0].trim()) {
+                      await DB.saveMessage({
+                          charId: charToSave.id,
+                          role: 'assistant',
+                          type: 'text',
+                          content: item.greetings[0].trim(),
+                          timestamp: Date.now(),
+                          metadata: item.greetings.length > 1
+                              ? { tavernGreetingIndex: 0, tavernGreetingTotal: item.greetings.length }
+                              : undefined,
+                      });
+                  }
+                  importedCharCount++;
+                  importedNames.push(charToSave.name);
+              }
+          }
+
+          if (createdGroupIds.length > 0) {
+              try {
+                  const nextExpanded = Array.from(new Set([...expandedGroups, ...createdGroupIds]));
+                  setExpandedGroups(nextExpanded);
+                  localStorage.setItem('os_char_groups_expanded', JSON.stringify(nextExpanded));
+              } catch {}
           }
 
           trackEvent('导入角色卡');
-          setTimeout(() => window.location.reload(), 500);
+          setTimeout(() => window.location.reload(), 600);
 
           const wbToastSuffix = importedWbCount > 0 ? `，并同步 ${importedWbCount} 条世界书` : '';
           const nameLabel = importedCharCount === 1 ? importedNames[0] : `${importedCharCount} 位角色`;
-          addToast(`角色 ${nameLabel} 导入成功${wbToastSuffix}`, 'success');
+          if (warnings.length > 0 && importedCharCount === warnings.length) {
+              addToast(`角色 ${nameLabel} 已通过立绘创建（原图酒馆隐藏数据被压缩剥离，可在设定中补充）`, 'info');
+          } else {
+              addToast(`角色 ${nameLabel} 导入成功${wbToastSuffix}`, 'success');
+          }
 
       } catch (err: any) {
           console.error(err);
@@ -1266,6 +1326,7 @@ ${isInitialGeneration ? `
                                                                char={char}
                                                                active={char.id === activeCharacterId}
                                                                onClick={() => { setEditingId(char.id); setView('detail'); }}
+                                                               onQuickChat={(e) => { e.stopPropagation(); setActiveCharacterId(char.id); openApp(AppID.Chat); }}
                                                                onDelete={(e) => {
                                                                    e.stopPropagation();
                                                                    setDeleteConfirmTarget(char.id);
@@ -1298,6 +1359,7 @@ ${isInitialGeneration ? `
                                        char={char}
                                        active={char.id === activeCharacterId}
                                        onClick={() => { setEditingId(char.id); setView('detail'); }}
+                                                               onQuickChat={(e) => { e.stopPropagation(); setActiveCharacterId(char.id); openApp(AppID.Chat); }}
                                        onDelete={(e) => {
                                            e.stopPropagation();
                                            setDeleteConfirmTarget(char.id);

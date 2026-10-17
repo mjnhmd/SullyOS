@@ -238,3 +238,76 @@ describe('3. 酒馆世界书高级递归与 Inclusion Group 权重组', () => {
         expect(titles).not.toContain('天气组：普通阴天');
     });
 });
+
+
+describe('4. 桌面真实图片与群像角色卡 (1_11.png + 3张转码立绘图片) 完整兼容验证', () => {
+    it('解析 1_11.png (县城 V3 群像卡)：自动拆分为独立角色列表 + 同名分组 + 独立立绘头像 + 优先读取 extensions.position=4 + 展开 {{roll:1d20}} + Display 正则渲染 HTML', async () => {
+        const pngBytes = fs.readFileSync('/Users/mengjingnan/Desktop/1_11.png');
+        const file = new File([pngBytes], '1_11.png', { type: 'image/png' });
+        const parsed = await parseAnyCharacterCardFile(file, 2000);
+
+        expect(parsed.sourceFormat).toBe('tavern');
+        expect(parsed.suggestedGroupName).toBe('县城');
+        expect(parsed.worldbooks).toHaveLength(61);
+
+        // 15 distinct sub-characters + 1 hub entry = 16 characters
+        expect(parsed.characters).toHaveLength(16);
+        const charNames = parsed.characters.map(c => c.character.name);
+        expect(charNames).toContain('张子薇');
+        expect(charNames).toContain('孙翌童');
+        expect(charNames).toContain('柳青');
+        expect(charNames).toContain('李南星');
+        expect(charNames).toContain('庞咏萱');
+        expect(charNames).toContain('县城 · 主页图鉴');
+
+        // Verify each split character has its dedicated portrait URL extracted from regex_scripts and summary from 人物速览
+        const liuQing = parsed.characters.find(c => c.character.name === '柳青')!;
+        expect(liuQing.character.avatar).toContain('liu_qing');
+        expect(liuQing.character.description).toContain('JK和娃圈行家');
+        expect(liuQing.greetings).toHaveLength(1);
+        expect(liuQing.greetings[0]).toContain('柳青|外出');
+
+        // Verify extensions.position=4 takes priority over legacy position="after_char"
+        const sceneInfoWb = parsed.worldbooks.find(w => w.title.trim() === '插图')!;
+        expect(sceneInfoWb.position).toBe(4);
+        expect(sceneInfoWb.depth).toBe(0);
+
+        const cotWb = parsed.worldbooks.find(w => w.title.trim() === '爱的思维链')!;
+        expect(cotWb.position).toBe(4);
+        expect(cotWb.depth).toBe(0);
+
+        // Verify {{roll:1d20}} dice macro expansion in 性斗骰子 worldbook
+        const diceWb = parsed.worldbooks.find(w => w.title.trim() === '性斗骰子')!;
+        const resolved = resolveWorldbookEntries([{ ...diceWb, disable: false }], [{ role: 'user', content: '进入nsfw场景' }], '柳青', '小帅');
+        expect(resolved).toHaveLength(1);
+        expect(resolved[0].content).not.toContain('{{roll:1d20}}');
+        expect(resolved[0].content).toMatch(/①:1d20=\d+/);
+
+        // Verify Display regex transforms <SceneInfo> and 【主页】 into rich <!DOCTYPE html> blocks
+        const transformedGreeting = applyTavernRegexRules(
+            liuQing.greetings[0],
+            liuQing.character.tavernRegexRules,
+            { timing: 'display', role: 'ai', userName: '小帅', charName: '柳青' },
+        );
+        expect(transformedGreeting).toContain('<!DOCTYPE html>');
+        expect(transformedGreeting).toContain('scene-info-panel');
+    });
+
+    it('兼容桌面 3 张被重命名为 .png 的 JPEG 立绘图片，自动识别真实 MIME 并生成可用角色卡而不报错', async () => {
+        const paths = [
+            '/Users/mengjingnan/Desktop/232624895728480__00001_.png',
+            '/Users/mengjingnan/Desktop/138bc55101f9460bba39cd8f918ee502.png',
+            '/Users/mengjingnan/Desktop/48b46017145056c2.png',
+        ];
+        for (const p of paths) {
+            const bytes = fs.readFileSync(p);
+            const name = p.split('/').pop()!;
+            const file = new File([bytes], name, { type: 'image/png' });
+            const parsed = await parseAnyCharacterCardFile(file, 3000);
+            expect(parsed.sourceFormat).toBe('image_fallback');
+            expect(parsed.character.avatar).toMatch(/^data:image\/jpeg;base64,/);
+            expect(parsed.characters).toHaveLength(1);
+            expect(parsed.warning).toBeTruthy();
+        }
+    });
+});
