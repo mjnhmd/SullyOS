@@ -15,7 +15,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot 'node_modules\vite\bin\v
   throw 'Source dependencies are missing. Run npm/pnpm install in the SullyOS source first.'
 }
 
-Write-Host '[1/4] Building the private Capacitor web bundle...'
+Write-Host '[1/5] Building the private Capacitor web bundle...'
 Push-Location $sourceRoot
 try {
   & node 'node_modules\vite\bin\vite.js' build --mode capacitor
@@ -35,7 +35,11 @@ if ($targetDist -ne $expectedTarget -or -not $targetDist.StartsWith($wrapperRoot
   throw "Refusing to replace an unexpected directory: $targetDist"
 }
 
-Write-Host '[2/4] Replacing only CHICK2/dist...'
+Write-Host '[2/5] Pruning CDN-hosted assets from the app bundle...'
+& node (Join-Path $PSScriptRoot 'prune-capacitor-assets.mjs') $sourceDist
+if ($LASTEXITCODE -ne 0) { throw "Asset pruning failed with exit code $LASTEXITCODE" }
+
+Write-Host '[3/5] Replacing only CHICK2/dist...'
 Get-ChildItem -LiteralPath $targetDist -Force | Remove-Item -Recurse -Force
 Get-ChildItem -LiteralPath $sourceDist -Force | Copy-Item -Destination $targetDist -Recurse -Force
 
@@ -44,7 +48,7 @@ if ($nativeBridgeCount -ne 1) {
   throw "Expected one native AMSG bridge bundle, found $nativeBridgeCount"
 }
 
-Write-Host '[3/4] Syncing Capacitor Android plugins and assets...'
+Write-Host '[4/5] Syncing Capacitor Android plugins and assets...'
 & node (Join-Path $PSScriptRoot 'sync-native-app-name.mjs') $wrapperRoot
 if ($LASTEXITCODE -ne 0) { throw "App display name sync failed with exit code $LASTEXITCODE" }
 Push-Location $wrapperRoot
@@ -60,7 +64,7 @@ if ($SkipAndroidBuild) {
   exit 0
 }
 
-Write-Host '[4/4] Building the debug APK...'
+Write-Host '[5/5] Building the debug APK...'
 $gradleDistRoot = Join-Path $env:USERPROFILE '.gradle\wrapper\dists\gradle-8.2.1-all'
 $gradleExecutable = Get-ChildItem -LiteralPath $gradleDistRoot -Filter 'gradle.bat' -Recurse -File -ErrorAction SilentlyContinue |
   Where-Object { $_.FullName -like '*\gradle-8.2.1\bin\gradle.bat' } |
