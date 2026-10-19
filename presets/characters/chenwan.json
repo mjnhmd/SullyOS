@@ -49,5 +49,5 @@
   "ruminationTendency": 0.8,
   "htmlModeCustomPrompt": "",
   "htmlModeEnabled": false,
-  "avatar": ""
+  "avatar": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><rect width=\"100\" height=\"100\" fill=\"%23E2F0CB\"/><text x=\"50\" y=\"55\" font-family=\"sans-serif\" font-weight=\"bold\" font-size=\"46\" text-anchor=\"middle\" dy=\".3em\" fill=\"white\" opacity=\"0.9\">晚</text></svg>"
 }

@@ -13,7 +13,8 @@ describe('内置角色', () => {
         const [{ character, worldbooks }] = buildBuiltinCharacterSeeds(1000);
         expect(character.id).toBe(BUILTIN_CHENWAN_CHARACTER_ID);
         expect(character.name).toBe('陈晚');
-        expect(character.avatar).toBe('');
+        expect(character.avatar.startsWith('data:image/svg+xml')).toBe(true);
+        expect(character.avatar).not.toContain('base64');
         expect(character.systemPrompt).toContain('{{user}}');
         expect(worldbooks.length).toBeGreaterThan(0);
         expect(worldbooks[0]).toMatchObject({ createdAt: 1000, updatedAt: 1000 });
