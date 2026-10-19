@@ -617,7 +617,15 @@ const UserLocationAnnouncement: React.FC<UpdatePopupProps> = ({ onDone, onExit }
     }} />;
 };
 
-const UPDATE_QUEUE: { key: string; render: (props: UpdatePopupProps) => React.ReactNode }[] = [
+/**
+ * 关闭全部版本更新公告。
+ *
+ * 本分发版面向「装上就能直接聊」的场景，首次启动不再逐条弹九宫格更新说明。
+ * 弹窗实现与已读 key 全部保留，改成 false 即可恢复。
+ */
+const SHOW_UPDATE_ANNOUNCEMENTS = false;
+
+const UPDATE_QUEUE: { key: string; render: (props: UpdatePopupProps) => React.ReactNode }[] = SHOW_UPDATE_ANNOUNCEMENTS ? [
     { key: USER_LOCATION_NOTICE_KEY, render: props => <UserLocationAnnouncement {...props} /> },
     { key: NAVIGATION_BALL_NOTICE_KEY, render: props => <NavigationBallAnnouncement {...props} /> },
     { key: HOME_UPDATE_KEY, render: props => <HomeUpdateAnnouncement {...props} /> },
@@ -627,7 +635,7 @@ const UPDATE_QUEUE: { key: string; render: (props: UpdatePopupProps) => React.Re
     { key: SAR_UPDATE_KEY, render: (props) => <SARUpdateAnnouncement {...props} /> },
     { key: NETWORK_TRANSIT_NOTICE_KEY_2026_08, render: (props) => <NetworkTransitNoticePopup {...props} /> },
     { key: UPDATE_NOTIFICATION_KEY_2026_08_10, render: (props) => <Live2DUpdatePopup {...props} /> },
-];
+] : [];
 
 export const shouldShowUpdateNotification = (): boolean => UPDATE_QUEUE.some((entry) => !isUpdateSeen(entry.key));
 
