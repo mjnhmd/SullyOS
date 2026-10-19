@@ -12,6 +12,8 @@ import {exportBeautyAuthorBackup} from '../utils/beautyAuthorBackup';
 
 import { initializeFirstUseGuide } from '../utils/firstUseGuide';
 import { buildBuiltinCharacterSeeds, hasSeededBuiltinCharacter, markBuiltinCharacterSeeded } from '../utils/builtinCharacters';
+import { decorationPatches } from '../utils/chatDecoration';
+import wechatDayPreset from '../presets/chat/wechat-day.json';
 import { startBeautyUsage, stopBeautyUsage, stopBeautyForThemeChange } from '../utils/beautyUsage';
 import { FEEDBACK_INVITATION_KEY, hasPriorFeedbackInstallEvidence, initializeFeedbackInvitation, suppressFeedbackInvitation } from '../utils/feedbackInvitation';
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
@@ -645,6 +647,11 @@ const defaultTheme: OSTheme = {
   preserveCustomIconOutlines: false,
   nowPlayingWidgetLight: true,
 };
+
+/** 「微信·日间」作为默认聊天外观只套一次；用户之后换掉就保持用户的选择。 */
+const WECHAT_DAY_DEFAULT_KEY = 'sullyos_wechat_day_default_v1';
+/** 内置装扮在 CSS 开头打的版本戳；存档里是旧版本时按原样升级一次。 */
+const WECHAT_DAY_CURRENT_VERSION = 2;
 
 /** 锁屏壁纸使用独立资产槽；undefined 表示继续跟随桌面壁纸。 */
 const resolveLockWallpaperStoredValue = async (w: string | undefined): Promise<string | undefined> => {
@@ -1618,6 +1625,44 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             }
         } catch (e) {
             console.error("Failed to load assets from DB", e);
+        }
+
+        // 微信·日间：第一次启动把「仿微信」套成聊天外观。写过 CSS 的存档不覆盖，
+        // 记号只保证不会每次启动又盖回去——之后用户在装扮里换掉就是换掉了。
+        // 已经套过内置版本、但内容还是旧稿的（如安全区修正前的），按原样升级一次；
+        // 用户自己改过任何一条就不再碰。
+        const existingCss = loadedTheme.chatChromeCustomCss || '';
+        // 只有「确实是我们写的旧版本」才升级；用户自己写的 CSS 一条都不碰。
+        // 没有版本戳但带着内置装扮的生成键图标规则，说明是加戳之前那一版。
+        const stamped = existingCss.match(/\/\* sully-builtin:wechat-day@(\d+) \*\//)?.[1];
+        const builtinVersion = stamped
+            ? Number(stamped)
+            : existingCss.includes('.sully-chat-generate-button') && existingCss.includes('顶栏根容器') ? 1 : 0;
+        const isFreshInstall = !localStorage.getItem(WECHAT_DAY_DEFAULT_KEY) && !existingCss;
+        const isOursOutdated = builtinVersion > 0 && builtinVersion < WECHAT_DAY_CURRENT_VERSION;
+        if (isFreshInstall || isOursOutdated) {
+            try {
+                const patch = await decorationPatches(
+                    wechatDayPreset as unknown as Parameters<typeof decorationPatches>[0],
+                    // 升级老稿时只换 CSS：用户这几天的布局调整不该被一起还原。
+                    isOursOutdated ? ['css'] : ['layout', 'css'],
+                    'global',
+                    {} as CharacterProfile,
+                    loadedTheme,
+                );
+                Object.assign(loadedTheme, patch.theme);
+                // 内存里的壁纸可能是本次会话的 blob: 地址，写进 localStorage 下次启动会坏图。
+                const mirror: Record<string, unknown> = { ...loadedTheme };
+                const wallpaper = mirror.wallpaper;
+                if (typeof wallpaper === 'string' && (wallpaper.startsWith('blob:') || wallpaper.startsWith('data:'))) {
+                    mirror.wallpaper = defaultTheme.wallpaper;
+                }
+                localStorage.setItem('os_theme', JSON.stringify(mirror));
+                localStorage.setItem(WECHAT_DAY_DEFAULT_KEY, '1');
+            } catch (error) {
+                // 不写记号：下次启动再试一次，不让一次失败变成永久默认。
+                console.error('默认聊天装扮套用失败，下次启动重试', error);
+            }
         }
 
         setTheme(loadedTheme);
