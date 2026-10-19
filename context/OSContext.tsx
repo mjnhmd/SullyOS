@@ -11,6 +11,7 @@ import {exportBeautyPreferences} from '../utils/beautyPreferencesBackup';
 import {exportBeautyAuthorBackup} from '../utils/beautyAuthorBackup';
 
 import { initializeFirstUseGuide } from '../utils/firstUseGuide';
+import { buildBuiltinCharacterSeeds, hasSeededBuiltinCharacter, markBuiltinCharacterSeeded } from '../utils/builtinCharacters';
 import { startBeautyUsage, stopBeautyUsage, stopBeautyForThemeChange } from '../utils/beautyUsage';
 import { FEEDBACK_INVITATION_KEY, hasPriorFeedbackInstallEvidence, initializeFeedbackInvitation, suppressFeedbackInvitation } from '../utils/feedbackInvitation';
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
@@ -1753,6 +1754,30 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
                      finalChars = finalChars.map(c => c.id === sullyV2.id ? updatedSully : c);
                  }
             }
+        }
+
+        // 内置角色：只在本地库还没有时写入一次。写入记号保证用户删掉后不再复活。
+        if (charactersReadSucceeded) {
+          for (const seed of buildBuiltinCharacterSeeds()) {
+            const { character, worldbooks: seedBooks } = seed;
+            if (finalChars.some(c => c.id === character.id)) {
+              markBuiltinCharacterSeeded(character.id);
+              continue;
+            }
+            if (hasSeededBuiltinCharacter(character.id)) continue;
+            try {
+              for (const book of seedBooks) {
+                if (dbWorldbooks.some(existing => existing.id === book.id)) continue;
+                await DB.saveWorldbook(book);
+                dbWorldbooks.push(book);
+              }
+              await DB.saveCharacter(character);
+              finalChars.push(character);
+              markBuiltinCharacterSeeded(character.id);
+            } catch (error) {
+              console.error('内置角色写入失败，下次启动会重试', error);
+            }
+          }
         }
 
         let resetAutoContextCount = 0;
