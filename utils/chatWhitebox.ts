@@ -36,7 +36,7 @@ export const WHITEBOX_SELECTOR_GROUPS = [
   },
   {
     label: '输入与功能面板',
-    selectors: ['.sully-chat-inputbar', '.sully-chat-composer', '.sully-chat-input-wrap', '.sully-chat-textarea', '.sully-chat-actions-button', '.sully-chat-send-button', '.sully-chat-emoji-suggestions', '.sully-chat-auto-reply', '.sully-chat-panel', '.sully-chat-panel button'],
+    selectors: ['.sully-chat-inputbar', '.sully-chat-composer', '.sully-chat-input-wrap', '.sully-chat-textarea', '.sully-chat-actions-button', '.sully-chat-generate-button', '.sully-chat-send-button', '.sully-chat-emoji-suggestions', '.sully-chat-auto-reply', '.sully-chat-panel', '.sully-chat-panel button'],
   },
   {
     label: '消息布局',

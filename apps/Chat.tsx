@@ -4044,8 +4044,7 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
                 tokenBreakdown={tokenBreakdown}
                 onClose={closeApp}
                 onTriggerAI={handleManualTrigger}
-                triggerIcon={isTyping || instantChatPending ? 'stop' : 'lightning'}
-                hideTrigger={inputPreferences.sendButtonGenerates}
+                hideTrigger
                 onShowCharsPanel={() => setShowPanel('chars')}
                 onDeleteBuff={(buffId) => {
                     const currentBuffs = char.activeBuffs || [];

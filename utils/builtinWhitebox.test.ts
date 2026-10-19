@@ -3,9 +3,9 @@ import {BUILTIN_WHITEBOX_PRESETS} from './builtinWhitebox';
 import {decorationPatches} from './chatDecoration';
 import {portableCssImages} from './cssImageAssets';
 
-// Export may use base64 instead of percent-encoded SVG; compare decoded assets and CSS.
-const normalizeImages=(css:string)=>css.replace(/data:image\/svg\+xml(;base64)?,([^"\n]*)/g,(_,base64,body)=>
- 'svg:'+JSON.stringify(base64?Buffer.from(body,'base64').toString('utf8'):decodeURIComponent(body)));
+// Export may use base64, percent-encoded or utf8 SVG; compare decoded assets and CSS.
+const normalizeImages=(css:string)=>css.replace(/data:image\/svg\+xml(;base64|;utf8|;charset=[^,]*)?,([^"\n]*)/g,(_,mode,body)=>
+ 'svg:'+JSON.stringify(mode===';base64'?Buffer.from(body,'base64').toString('utf8'):decodeURIComponent(body)));
 
 describe('bundled star orbit outfits',()=>{
  it.each(BUILTIN_WHITEBOX_PRESETS)('$name is portable and applies a complete outfit without changing sounds',async item=>{

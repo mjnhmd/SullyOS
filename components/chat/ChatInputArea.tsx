@@ -131,6 +131,9 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     const canEndEditing = canSwitchToGenerate || autoReplyEnabled;
     const isGenerateButton = canSwitchToGenerate && !isInputFocused;
     const primaryButtonDisabled = isGenerateButton ? false : !input.trim();
+    // 不启用「发送键代替生成键」时，把生成入口做成输入栏右下角的独立按钮，
+    // 和发送键分开：用户按发送就是发文字，不会误触成"让角色回复"。
+    const showGenerateButton = !!onGenerate && !sendButtonGenerates && !compactHome;
 
     useEffect(() => {
         onInputFocusChange?.(isInputFocused);
@@ -746,6 +749,20 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                             <Smiley className="w-6 h-6" weight="regular" />
                         </button>
                     </div>
+                    {showGenerateButton && (
+                        <button
+                            type="button"
+                            data-guide="generate"
+                            onClick={onGenerate}
+                            aria-label={isTyping ? '停止回复' : '生成回复'}
+                            title={isTyping ? '停止回复' : '让对方回复已发送的消息'}
+                            className={`sully-chat-generate-button ${actionButtonClass}`}
+                        >
+                            {isTyping
+                                ? <span className="block w-3.5 h-3.5 rounded-sm bg-current" />
+                                : <Lightning className="w-5 h-5" weight="fill" />}
+                        </button>
+                    )}
                     <button
                         ref={sendButtonRef}
                         data-guide={isGenerateButton ? 'generate' : undefined}

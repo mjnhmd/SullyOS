@@ -15,6 +15,8 @@ let container: HTMLDivElement;
 let root: Root;
 let props: React.ComponentProps<typeof ChatInputArea>;
 const textarea = () => container.querySelector('textarea')!;
+const sendButton = () => container.querySelector<HTMLButtonElement>('button[aria-label="发送文字"]');
+const generateButton = () => container.querySelector<HTMLButtonElement>('button[aria-label="生成回复"], button[aria-label="停止回复"]');
 const primary = () => container.querySelector<HTMLButtonElement>('button[aria-label="发送文字"], button[aria-label="生成回复"], button[aria-label="停止回复"]')!;
 const renderInput = (patch: Partial<typeof props> = {}) => {
     props = { ...props, ...patch };
@@ -54,12 +56,30 @@ afterEach(() => {
 describe('private chat input controls', () => {
     it('keeps the existing send button and Enter behavior by default', () => {
         renderInput();
-        expect(primary().getAttribute('aria-label')).toBe('发送文字');
+        expect(sendButton()!.getAttribute('aria-label')).toBe('发送文字');
+        expect(generateButton()!.getAttribute('aria-label')).toBe('生成回复');
         expect(keydown().defaultPrevented).toBe(true);
         expect(props.onSend).toHaveBeenCalledTimes(1);
         expect(props.onGenerate).not.toHaveBeenCalled();
+        act(() => generateButton()!.click());
+        expect(props.onGenerate).toHaveBeenCalledTimes(1);
+        expect(props.onSend).toHaveBeenCalledTimes(1);
         renderInput({ input: '' });
-        expect(primary().disabled).toBe(true);
+        expect(sendButton()!.disabled).toBe(true);
+        expect(generateButton()!.disabled).toBe(false);
+    });
+
+    it('keeps the dedicated generate button before send so community last-of-type selectors still hit send', () => {
+        renderInput();
+        const composer = container.querySelector('.sully-chat-inputbar > div:first-child')!;
+        const buttons = Array.from(composer.children).filter(el => el.tagName === 'BUTTON') as HTMLButtonElement[];
+        expect(buttons[buttons.length - 1]).toBe(sendButton());
+        expect(generateButton()!.classList.contains('sully-chat-generate-button')).toBe(true);
+        expect(generateButton()!.nextElementSibling).toBe(sendButton());
+        renderInput({ isTyping: true });
+        expect(generateButton()!.getAttribute('aria-label')).toBe('停止回复');
+        act(() => generateButton()!.click());
+        expect(props.onGenerate).toHaveBeenCalledTimes(1);
     });
 
     it('allows newlines when Enter sending is off, and Shift+Enter in either mode', () => {

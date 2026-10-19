@@ -1848,8 +1848,7 @@ ${memberTimeline || '(暂无互动记录)'}
                     icon: <Question className="w-5 h-5" weight="bold" />,
                     onClick: () => setModalType('help'),
                 }}
-                triggerIcon={isTyping ? 'stop' : 'lightning'}
-                hideTrigger={inputPreferences.sendButtonGenerates && !isTyping}
+                hideTrigger
                 onClose={() => setView('list')}
                 onTriggerAI={() => triggerGroupAI(messages)}
                 onShowCharsPanel={openGroupSettings}
